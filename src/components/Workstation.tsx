@@ -13,8 +13,18 @@ interface Props {
   dispatch: Dispatch<GameAction>;
 }
 
-/** Thứ tự nút ở quầy: mì → đồ nhúng → rau → nước uống. */
-const KIND_ORDER: IngredientKind[] = ['noodle', 'topping', 'veggie', 'drink'];
+/** Các cụm nút ở quầy, theo thứ tự: mì → thịt & hải sản → rau → nước uống. */
+const GROUPS: { kind: IngredientKind; title: string }[] = [
+  { kind: 'noodle', title: 'Mì' },
+  { kind: 'meat', title: '🥩 Thịt · Hải sản' },
+  { kind: 'veggie', title: '🥬 Rau · Nấm · Kim chi' },
+  { kind: 'drink', title: '🥤 Nước uống' },
+];
+const KIND_ORDER = GROUPS.map((g) => g.kind);
+
+function byKind(a: IngredientId, b: IngredientId): number {
+  return KIND_ORDER.indexOf(INGREDIENTS[a].kind) - KIND_ORDER.indexOf(INGREDIENTS[b].kind);
+}
 
 function OrderCard({ customer, state }: { customer: Customer | undefined; state: GameState }) {
   if (!customer) {
@@ -48,10 +58,10 @@ function OrderCard({ customer, state }: { customer: Customer | undefined; state:
           <span>🌶️ {spiceLabel(order.spice)}</span>
           <span className="count">{shots}/{order.spice} shot</span>
         </li>
-        {(Object.entries(need) as [IngredientId, number][]).map(([id, n]) => {
+        {(Object.entries(need) as [IngredientId, number][]).sort(([a], [b]) => byKind(a, b)).map(([id, n]) => {
           const h = have[id] ?? 0;
           return (
-            <li key={id} className={h === n ? 'ok' : h > n ? 'bad' : ''}>
+            <li key={id} className={`kind-${INGREDIENTS[id].kind} ${h === n ? 'ok' : h > n ? 'bad' : ''}`}>
               <span>{INGREDIENTS[id].emoji} {INGREDIENTS[id].name}</span>
               <span className="count">{h}/{n}</span>
             </li>
@@ -103,27 +113,39 @@ function ChiliJar({ shots, target, onAdd }: { shots: number; target: number | nu
 export function Workstation({ state, dispatch }: Props) {
   const customer = state.customers.find((c) => c.id === state.selectedCustomerId);
   const need = customer ? requiredRecipe(customer.order) : {};
-  const ingredients = stationIngredients(state.totalRevenue).sort(
-    (a, b) => KIND_ORDER.indexOf(INGREDIENTS[a].kind) - KIND_ORDER.indexOf(INGREDIENTS[b].kind),
-  );
+  const ingredients = stationIngredients(state.totalRevenue);
   const empty = state.bowl.steps.length === 0;
   const hasFood = bowlItems(state.bowl).some((id) => INGREDIENTS[id].kind !== 'drink');
+
+  const inBowl = bowlCounts(state.bowl);
 
   const renderButton = (id: IngredientId) => {
     const ing = INGREDIENTS[id];
     const stock = state.inventory[id];
     const out = stock < 1;
+    const count = inBowl[id] ?? 0;
+    const over = count > (need[id] ?? 0);
     return (
-      <button
-        key={id}
-        className={`ing-btn kind-${ing.kind} ${id in need ? 'needed' : ''} ${out ? 'out' : ''}`}
-        onClick={() => dispatch(out ? { type: 'BUY_PACK', id } : { type: 'ADD_INGREDIENT', id })}
-        aria-label={out ? `Hết ${ing.name}, chạm để nhập 1 gói` : `Thêm ${ing.name}`}
-      >
-        <span className="ing-emoji">{ing.emoji}</span>
-        <span className="ing-name">{ing.name}</span>
-        <span className="ing-stock">{out ? `Nhập ${formatShortVND(ing.packPrice)}` : stock}</span>
-      </button>
+      <div key={id} className="ing-cell">
+        <button
+          className={`ing-btn kind-${ing.kind} ${id in need ? 'needed' : ''} ${out ? 'out' : ''}`}
+          onClick={() => dispatch(out ? { type: 'BUY_PACK', id } : { type: 'ADD_INGREDIENT', id })}
+          aria-label={out ? `Hết ${ing.name}, chạm để nhập 1 gói` : `Thêm ${ing.name}`}
+        >
+          <span className="ing-emoji">{ing.emoji}</span>
+          <span className="ing-name">{ing.name}</span>
+          <span className="ing-stock">{out ? `Nhập ${formatShortVND(ing.packPrice)}` : stock}</span>
+        </button>
+        {count > 0 && (
+          <button
+            className={`ing-minus ${over ? 'over' : ''}`}
+            onClick={() => dispatch({ type: 'REMOVE_INGREDIENT', id })}
+            aria-label={`Bớt 1 ${ing.name} (trong tô đang có ${count})`}
+          >
+            −{count}
+          </button>
+        )}
+      </div>
     );
   };
 
@@ -135,8 +157,31 @@ export function Workstation({ state, dispatch }: Props) {
       </div>
 
       <div className="ingredients">
-        <ChiliJar shots={chiliShots(state.bowl)} target={customer ? customer.order.spice : null} onAdd={() => dispatch({ type: 'ADD_CHILI' })} />
-        <div className="ing-grid">{ingredients.map(renderButton)}</div>
+        <div className="chili-row">
+          <ChiliJar shots={chiliShots(state.bowl)} target={customer ? customer.order.spice : null} onAdd={() => dispatch({ type: 'ADD_CHILI' })} />
+          <button
+            className="btn chili-minus"
+            onClick={() => dispatch({ type: 'REMOVE_CHILI' })}
+            disabled={chiliShots(state.bowl) === 0}
+            aria-label="Bớt 1 shot ớt"
+          >
+            −🌶️
+          </button>
+        </div>
+        <div className="ing-groups">
+          {GROUPS.map((g) => {
+            const ids = ingredients.filter((id) => INGREDIENTS[id].kind === g.kind);
+            if (ids.length === 0) return null;
+            return (
+              <div key={g.kind} className={`ing-group group-${g.kind}`} style={{ gridColumn: `span ${ids.length}` }}>
+                <span className="ing-group-title">{g.title}</span>
+                <div className="ing-grid" style={{ gridTemplateColumns: `repeat(${ids.length}, 1fr)` }}>
+                  {ids.map(renderButton)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div className="actions">

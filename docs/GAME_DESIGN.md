@@ -2,7 +2,8 @@
 
 ## 1. Ý tưởng
 
-Người chơi là chủ một **quán mì cay** nhỏ. Mỗi sáng phải **dọn dẹp quán** rồi mới được mở cửa. Khách vào quán
+Người chơi **đăng nhập bằng Gmail** rồi làm chủ một **quán mì cay** nhỏ (tiến trình lưu trong database, đổi máy vẫn
+chơi tiếp). Mỗi sáng phải **cầm chổi quét dọn quán** rồi mới được mở cửa. Khách vào quán
 (hoặc đặt qua **Grab**) gọi một tô mì cay kèm **cấp độ cay 0–7**, có khi gọi thêm **nước uống**. Người chơi
 **chạm từng nguyên liệu** để bỏ vào tô, chạm **hũ ớt** đúng số shot = cấp cay, rồi giao món. Khách **ăn tại chỗ**
 (ngồi một trong **10 bàn**) hoặc **mua mang về**. Ăn xong khách nhận xét kèm biểu cảm: khen ngon 😋, cay quá đỏ
@@ -22,10 +23,12 @@ Sáng: 🧹 dọn quán ─► 🔓 Mở cửa (8:00) ─► khách vào / đơn
 Tổng kết ngày ◄── hết khách & bàn trống ◄── 22:00 đóng cửa (không nhận khách mới từ ~21:15)
 ```
 
-- **Dọn quán (`phase = 'prep'`)**: đầu mỗi ngày có **7 chỗ bẩn** (`DIRT_SPOTS`) rải trong quán. Chạm để dọn; chỗ có
-  dấu • cần chạm nhiều lần. Đồng hồ chưa chạy, chưa có khách. Dọn sạch mới bấm được **🔓 Mở cửa đón khách**.
+- **Dọn quán (`phase = 'prep'`)**: đầu mỗi ngày có **7 chỗ bẩn** (`DIRT_SPOTS`) rải trong quán. **Kéo cây chổi** 🧹
+  quét qua chỗ bẩn: mỗi lần chổi lướt vào là 1 lượt quét (chổi đung đưa, bụi bay, chỗ bẩn rung và mờ dần). Chỗ có
+  dấu • cần quét nhiều lượt – đưa chổi ra rồi quét lại vào. Đồng hồ chưa chạy, chưa có khách. Dọn sạch mới bấm được
+  **🔓 Mở cửa đón khách**.
 
-  | Chỗ bẩn | Số lần chạm | Tỉ lệ |
+  | Chỗ bẩn | Số lượt quét | Tỉ lệ |
   |---|---|---|
   | 🧻 Rác | 1 | 30% |
   | 🥣 Chén bẩn trên bàn (mỗi bàn tối đa 1) | 2 | 25% |
@@ -35,7 +38,8 @@ Tổng kết ngày ◄── hết khách & bàn trống ◄── 22:00 đóng 
 
 - Một ngày mở cửa từ **8:00 đến 22:00**, kéo dài **3 phút** thực (`DAY_LENGTH_MS`).
 - Ngừng đón khách mới **10 giây** trước giờ đóng cửa; sau 22:00 phục vụ nốt khách ở quầy và chờ khách đang ngồi
-  ăn xong.
+  ăn xong. Trong lúc đó quán hiện **"Sắp đóng cửa"** và *"quán sẽ đóng cửa khi khách cuối cùng ăn xong (còn N khách
+  đang ăn)"*; cửa treo biển CLOSED với khách mới.
 - **Tổng kết ngày**: khách phục vụ / bỏ về / tô nấu sai, doanh thu, tip, nhập hàng, tiền bỏ tô nấu sai, tiền hoàn
   cho khách chê, lương, lợi nhuận. Đánh giá còn treo của khách mang về được tính luôn vào ngày đó.
 - Game tự lưu; tắt app mở lại vẫn chơi tiếp được.
@@ -66,8 +70,13 @@ Công thức của đơn = công thức món + nước khách gọi (nước đ�
 🌶️ Hũ ớt × 3 shot
 ```
 
+- Quầy chia **4 cụm có màu riêng**: 🍜 Mì · 🥩 Thịt · Hải sản (mực, tôm, cá viên chiên, bò, xúc xích) ·
+  🥬 Rau · Nấm · Kim chi (kim chi, nấm kim châm, cải tím, súp lơ) · 🥤 Nước uống (Coca, Sữa).
 - Mỗi lần chạm nguyên liệu = bỏ 1 phần vào tô (tô SVG hiện thêm miếng tương ứng). Nước thì đặt cạnh tô.
-- **Hũ ớt**: mỗi lần chạm thêm 1 shot ớt (miễn phí), tối đa 7. Cấp 0 = không cho ớt. Nước dùng đỏ dần theo số shot.
+- **Bỏ dư thì bớt được**: nguyên liệu nào đang có trong tô sẽ hiện nút **−N** ở góc (đỏ nếu đang thừa so với đơn);
+  chạm để bớt 1 phần, phần đó được trả lại kho. "Hoàn tác" bỏ thao tác gần nhất.
+- **Hũ ớt**: mỗi lần chạm thêm 1 shot ớt (miễn phí), tối đa 7; nút **−🌶️** cạnh hũ để bớt 1 shot. Cấp 0 = không cho
+  ớt. Nước dùng đỏ dần theo số shot.
 - Tô chứa tối đa 12 phần, khay tối đa 2 chai nước.
 - Thẻ đơn hiện tiến độ `0/1 → 1/1` từng dòng, phần thừa tô đỏ; nút nguyên liệu cần cho đơn đang chọn được viền đỏ.
   Thứ tự bỏ không quan trọng.
@@ -156,7 +165,24 @@ Công thức phụ:
 | 🥤 Coca Cola | 10.000₫ | 15.000₫ |
 | 🥛 Sữa | 10.000₫ | 15.000₫ |
 
-## 6. Danh tiếng ⭐
+## 6. Đánh giá & danh tiếng ⭐
+
+### Tab Đánh giá
+
+Mỗi lượt nhận xét của khách được lưu lại (60 lượt gần nhất, nằm trong save nên cũng lưu trong database) và xem ở nút
+**⭐ Đánh giá** trên HUD: điểm trung bình, lọc *Tất cả / Khen / Chê*, mỗi dòng có chân dung khách với biểu cảm, số sao,
+câu nhận xét, ngày, kiểu phục vụ (🪑 / 🛍️ / 🛵), món và cấp cay khách gọi.
+
+| Cảm nhận | Sao |
+|---|---|
+| 😋 Ngon | ★★★★★ |
+| 🥵 Cay quá / 😒 Chưa đủ cay | ★★★ |
+| 🥵 Cay xé lưỡi / 😒 Không cay chút nào | ★★ |
+| 😞 Sai món | ★ |
+
+Khách ăn tại chỗ được ghi khi ăn xong, khách mang về / Grab khi gửi đánh giá, sai món thì ghi ngay lúc trả tô.
+
+### Danh tiếng
 
 - Thang 0–100, bắt đầu 50, hiện thành 0–5 sao.
 - Ảnh hưởng: tần suất khách tới và tiền tip.
@@ -172,24 +198,40 @@ Công thức phụ:
 - Lương trừ vào cuối mỗi ngày (có thể khiến tiền âm – khi đó không nhập hàng được).
 - Có thể cho nghỉ bất kỳ lúc nào; đơn đang nấu dở trả lại hàng chờ, nguyên liệu đã dùng thì mất.
 
-## 8. Điều khiển & giao diện
+## 8. Tài khoản & dữ liệu
 
-- **Màn hình đầu**: linh vật tô mì cay bốc lửa, đăng nhập Google (nếu bật Firebase) hoặc chơi không đăng nhập.
+- **Bắt buộc đăng nhập Gmail** (Google qua Firebase Authentication) mới vào được quán. Màn hình đầu chỉ có nút
+  "Đăng nhập bằng Gmail"; đăng nhập xong hiện tên + ảnh và nút "Vào quán".
+- Tiến trình lưu trong **database Firestore** (`saves/{uid}`): ghi mỗi 10 giây khi có thay đổi, ghi ngay khi mở cửa /
+  hết giờ / tổng kết / sang ngày, khi ẩn app và trước khi thoát hoặc đăng xuất. Trên máy giữ thêm một bản sao để chơi
+  tiếp khi mất mạng (Firestore tự gửi bù khi có mạng lại).
+- Vào quán: lấy bản mới hơn giữa database và bản sao trên máy. Không đọc được database mà máy cũng không có bản sao
+  → báo lỗi mạng chứ **không tạo quán mới** (tránh ghi đè dữ liệu thật).
+- Chấm nhỏ trên nút ⚙️ cho biết trạng thái lưu: xanh = đã lưu, vàng = đang lưu, đỏ = chưa lưu được (sẽ thử lại).
+  ⚙️ Cài đặt ghi rõ thời điểm lưu gần nhất.
+- Bị đăng xuất (hết phiên, đăng xuất nơi khác) thì quay về màn hình đầu.
+- **Đổi tên quán bất cứ lúc nào** trong ⚙️ Cài đặt (tối đa 24 ký tự, không để trống).
+
+## 9. Điều khiển & giao diện
+
+- **Màn hình đầu**: linh vật tô mì cay bốc lửa, nút đăng nhập Gmail.
 - **Tạo quán**: đặt tên quán, chọn phong cách **Đỏ lửa / Đen than / Trắng ớt** (đều tông đỏ · trắng · đen).
-- **HUD trên cùng**: tiền mặt · ⭐ danh tiếng · ⏸️ · ⚙️ · thanh doanh thu tới 10 triệu · 📦 Kho, 📖 Menu, 👥 Nhân sự.
+- **HUD trên cùng**: tiền mặt · ⭐ danh tiếng · ⏸️ · ⚙️ (kèm chấm trạng thái lưu) · thanh doanh thu tới 10 triệu ·
+  📦 Kho, 📖 Menu, 👥 Nhân sự, ⭐ Đánh giá.
 - **Khung cảnh quán** (cửa hàng đồ ăn):
   - Phòng ăn phía trên: **10 bàn** (2 dãy × 5) khăn trải đỏ; khách ngồi ăn có tô mì bốc khói; ăn xong hiện biểu
     cảm + câu nhận xét + tiền trả. Góc trái hiện khách đang **chờ bàn**. Góc phải: số bàn đang có khách.
-  - Quầy gọi món phía dưới: sàn caro đen trắng, cửa ra vào, khách xếp hàng ở quầy; khách mang về / tài xế Grab
-    xách túi đi ra cửa.
-  - Lúc dọn quán: các chỗ bẩn lắc lư trên cảnh, chạm để dọn.
+  - Quầy gọi món phía dưới: sàn caro đen trắng, cửa ra vào, mặt quầy in tên quán, khách xếp hàng ở quầy; khách mang
+    về / tài xế Grab xách túi đi ra cửa. Cửa chỉ mở khi có người bước vào hoặc ra tới cửa (khách ăn tại chỗ đi vào
+    bàn thì không).
+  - Lúc dọn quán: các chỗ bẩn lắc lư trên cảnh, cây chổi dựng ở góc phải – kéo để quét.
 - **Quầy nấu**: tô mì SVG (nguyên liệu nổi trên mặt, nước dùng đỏ dần theo ớt, nước uống đặt cạnh tô), thẻ đơn
-  (kiểu phục vụ, cấp cay, checklist 2 cột), **hũ ớt** với thước 7 quả ớt (quả ớt mục tiêu có viền vàng), lưới 12 nút
-  nguyên liệu.
+  (kiểu phục vụ, cấp cay, checklist 2 cột theo thứ tự mì → thịt → rau → nước, nước tô xanh), **hũ ớt** với thước
+  7 quả ớt (quả ớt mục tiêu có viền vàng) + nút bớt ớt, 4 cụm nút nguyên liệu có nút **−** để bớt.
 - **Thanh hành động**: ↶ Hoàn tác · 🗑️ Đổ bỏ · 🍜 Giao món.
 - Modal mở ra thì game tạm dừng.
 
-## 9. Ý tưởng mở rộng
+## 10. Ý tưởng mở rộng
 
 - Topping thêm (thêm mì, thêm bò…), size tô.
 - Bàn bẩn sau khi khách ăn xong phải lau mới cho khách mới ngồi.

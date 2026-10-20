@@ -8,6 +8,7 @@ import { formatShortVND } from '../game/money';
 import { customerTitle, serviceLabel } from '../game/orders';
 import type { GameAction } from '../game/state';
 import type { Customer, CustomerLook, Diner, DirtSpot, GameState, OrderChannel, Reaction } from '../game/types';
+import { BroomLayer } from './Broom';
 import { CustomerFigure, type CarryItem, type FigureMood } from './CustomerFigure';
 
 interface Props {
@@ -199,10 +200,14 @@ function DepartureActor({ d }: { d: Departure }) {
   );
 }
 
-/** Khách vừa rời quầy – giữ lại một lúc để vẽ cảnh đi ra cửa. Khách ăn tại chỗ thì vào bàn (không đi ra). */
-function useDepartures(state: GameState): Departure[] {
+/**
+ * Khách vừa rời quầy – giữ lại một lúc để vẽ cảnh đi ra cửa. Khách ăn tại chỗ thì vào bàn (không đi ra).
+ * `exits` tăng mỗi khi có người ra tới cửa – dùng để mở cửa đúng lúc.
+ */
+function useDepartures(state: GameState): { departures: Departure[]; exits: number } {
   const prev = useRef<Customer[]>(state.customers);
   const [departures, setDepartures] = useState<Departure[]>([]);
+  const [exits, setExits] = useState(0);
   const timers = useRef<number[]>([]);
 
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
@@ -231,11 +236,16 @@ function useDepartures(state: GameState): Departure[] {
     setDepartures((list) => [...list, ...fresh]);
     for (const d of fresh) {
       const total = (d.fromX - DOOR_X) * WALK_MS_PER_PERCENT + 400;
-      timers.current.push(window.setTimeout(() => setDepartures((list) => list.filter((x) => x.id !== d.id)), total));
+      timers.current.push(
+        window.setTimeout(() => {
+          setDepartures((list) => list.filter((x) => x.id !== d.id));
+          setExits((n) => n + 1);
+        }, total),
+      );
     }
   }, [state.customers, state.events]);
 
-  return departures;
+  return { departures, exits };
 }
 
 interface FinishedMeal {
@@ -335,31 +345,40 @@ function Table({
   );
 }
 
-function DirtButton({ spot, onClean }: { spot: DirtSpot; onClean: () => void }) {
+/** Một chỗ bẩn; mỗi lần bị chổi quét thì lắc + mờ dần theo số lần còn lại. */
+function Dirt({ spot }: { spot: DirtSpot }) {
   const type = DIRT_TYPES[spot.kind];
   const style =
     spot.table !== null
       ? { left: `${tableX(spot.table)}%`, top: tableTop(spot.table) - 14 }
       : { left: `${spot.x}%`, top: `${spot.y}%` };
   return (
-    <button className={`dirt dirt-${spot.kind}`} style={style} onClick={onClean} aria-label={`Dọn ${type.name}`}>
+    <div
+      data-dirt-id={spot.id}
+      className={`dirt dirt-${spot.kind} ${spot.hp < type.hp ? 'hit' : ''}`}
+      style={{ ...style, opacity: 0.45 + (0.55 * spot.hp) / type.hp }}
+      aria-label={type.name}
+    >
       <span className="dirt-emoji">{type.emoji}</span>
       {spot.hp > 1 && <span className="dirt-hp">{'•'.repeat(spot.hp)}</span>}
-    </button>
+    </div>
   );
 }
 
 export function ShopScene({ state, dispatch }: Props) {
-  const departures = useDepartures(state);
+  const { departures, exits } = useDepartures(state);
   const meals = useFinishedMeals(state);
   const complaints = useComplaints(state);
   const prep = state.phase === 'prep';
   const closed = state.phase !== 'open';
+  // Hết giờ nhưng còn khách ở quầy / đang ngồi ăn / chờ bàn: quán chỉ đóng hẳn khi khách cuối cùng ăn xong.
+  const stillEating = state.tables.filter((d) => d !== null).length + state.tableQueue.length;
+  const closingSoon = state.phase === 'closing' && (stillEating > 0 || state.customers.length > 0);
   const busyTables = state.tables.filter((d) => d !== null).length;
 
-  // Cửa mở ra mỗi khi có khách vào hoặc ra.
+  // Cửa chỉ mở khi có khách bước vào (khách mới) hoặc ra tới cửa – khách ăn tại chỗ đi vào bàn thì không.
   const [doorOpen, setDoorOpen] = useState(false);
-  const traffic = state.customers.length + departures.length * 100 + state.nextId;
+  const traffic = `${state.nextId}-${exits}`;
   useEffect(() => {
     setDoorOpen(true);
     const id = window.setTimeout(() => setDoorOpen(false), DOOR_OPEN_MS);
@@ -374,9 +393,6 @@ export function ShopScene({ state, dispatch }: Props) {
       <div className="dining-wall">
         <div className="lantern" style={{ left: '30%' }} />
         <div className="lantern" style={{ left: '70%' }} />
-        <div className="shop-sign">
-          <span>🌶️ {state.shop.name}</span>
-        </div>
       </div>
       <div className="dining-floor" />
       <div className="counter-floor" />
@@ -384,7 +400,7 @@ export function ShopScene({ state, dispatch }: Props) {
       <div className="scene-hud">
         <span className="pill small">
           Ngày {state.day} ·{' '}
-          <b className={closed ? 'closing' : ''}>{prep ? 'Dọn quán' : closed ? 'Đóng cửa' : clock(state.dayTimeMs)}</b>
+          <b className={closed ? 'closing' : ''}>{prep ? 'Dọn quán' : closingSoon ? 'Sắp đóng cửa' : closed ? 'Đóng cửa' : clock(state.dayTimeMs)}</b>
         </span>
         {staff.length > 0 && (
           <span className="pill small staff-pill">
@@ -436,14 +452,22 @@ export function ShopScene({ state, dispatch }: Props) {
           onSelect={(id) => dispatch({ type: 'SELECT_CUSTOMER', id })}
         />
       ))}
-      <div className="counter-bar" aria-hidden="true" />
+      <div className="counter-bar">
+        <span className="counter-name">🌶️ {state.shop.name}</span>
+      </div>
 
       {!prep && state.customers.length === 0 && departures.length === 0 && (
-        <div className="queue-empty">{closed ? 'Quán đã đóng cửa 🌙' : 'Đang chờ khách…'}</div>
+        <div className="queue-empty">
+          {closingSoon
+            ? `🌙 Hết giờ nhận khách – quán sẽ đóng cửa khi khách cuối cùng ăn xong (còn ${stillEating} khách đang ăn)`
+            : closed
+              ? 'Quán đã đóng cửa 🌙'
+              : 'Đang chờ khách…'}
+        </div>
       )}
 
-      {prep &&
-        state.dirt.map((spot) => <DirtButton key={spot.id} spot={spot} onClean={() => dispatch({ type: 'CLEAN', id: spot.id })} />)}
+      {prep && state.dirt.map((spot) => <Dirt key={`${spot.id}-${spot.hp}`} spot={spot} />)}
+      {prep && <BroomLayer dirt={state.dirt} onSweep={(id) => dispatch({ type: 'CLEAN', id })} />}
     </section>
   );
 }

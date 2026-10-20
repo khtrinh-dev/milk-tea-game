@@ -25,7 +25,7 @@ interface Firebase {
 
 const SAVES = 'saves';
 /** Không chờ mây quá lâu khi mạng yếu – dùng save trên máy. */
-const CLOUD_TIMEOUT_MS = 6_000;
+const CLOUD_TIMEOUT_MS = 10_000;
 
 let firebasePromise: Promise<Firebase> | null = null;
 
@@ -120,35 +120,45 @@ export async function signOutPlayer(): Promise<void> {
   await authLib.signOut(auth);
 }
 
-/** Đọc save trên mây. Mất mạng hoặc quá thời gian chờ → null (dùng save trên máy). */
-export async function loadCloudSave(uid: string): Promise<SaveFile | null> {
+/**
+ * Đọc save của người chơi trong Firestore.
+ * - `{ ok: true, file: null }`: tài khoản chưa có quán (lần đầu chơi).
+ * - `{ ok: false }`: mất mạng / quá thời gian chờ – KHÔNG được coi là "chưa có quán", tránh tạo quán mới đè lên dữ liệu thật.
+ */
+export type CloudLoad = { ok: true; file: SaveFile | null } | { ok: false };
+
+export async function loadCloudSave(uid: string): Promise<CloudLoad> {
   try {
     const { db, dbLib } = await loadFirebase();
-    const read = dbLib.getDoc(dbLib.doc(db, SAVES, uid)).then((snap) => {
+    // Đọc thẳng từ máy chủ (không lấy cache offline) để chắc chắn là dữ liệu mới nhất.
+    const read = dbLib.getDocFromServer(dbLib.doc(db, SAVES, uid)).then((snap): CloudLoad => {
       const data = snap.data() as { save?: string } | undefined;
-      return parseSave(data?.save);
+      return { ok: true, file: parseSave(data?.save) };
     });
-    return await withTimeout(read, CLOUD_TIMEOUT_MS, null);
+    return await withTimeout<CloudLoad>(read, CLOUD_TIMEOUT_MS, { ok: false });
   } catch {
-    return null;
+    return { ok: false };
   }
 }
 
-/** Ghi save lên mây (không chờ: Firestore tự xếp hàng khi offline). */
-export function writeCloudSave(uid: string, state: GameState, savedAt: number): void {
-  loadFirebase()
-    .then(({ db, dbLib }) =>
-      dbLib.setDoc(dbLib.doc(db, SAVES, uid), {
-        save: serializeSave(state, savedAt),
-        savedAt,
-        shopName: state.shop.name,
-        totalRevenue: state.totalRevenue,
-        updatedAt: dbLib.serverTimestamp(),
-      }),
-    )
-    .catch(() => {
-      // Bỏ qua: lần lưu sau sẽ thử lại, save trên máy vẫn còn.
-    });
+/**
+ * Ghi tiến trình vào Firestore (`saves/{uid}`): bản save đầy đủ + vài cột dễ xem/tra cứu trong console.
+ * Promise chỉ xong khi máy chủ xác nhận; khi offline Firestore tự xếp hàng và gửi lại lúc có mạng.
+ */
+export async function writeCloudSave(player: Player, state: GameState, savedAt: number): Promise<void> {
+  const { db, dbLib } = await loadFirebase();
+  await dbLib.setDoc(dbLib.doc(db, SAVES, player.uid), {
+    save: serializeSave(state, savedAt),
+    savedAt,
+    playerName: player.name,
+    email: player.email,
+    shopName: state.shop.name,
+    day: state.day,
+    money: state.money,
+    totalRevenue: state.totalRevenue,
+    reputation: Math.round(state.reputation),
+    updatedAt: dbLib.serverTimestamp(),
+  });
 }
 
 export function authErrorMessage(e: unknown): string {

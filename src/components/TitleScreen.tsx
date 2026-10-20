@@ -3,6 +3,8 @@ import type { Player } from '../services/cloud';
 interface Props {
   player: Player | null;
   cloudEnabled: boolean;
+  /** Cho chơi thử không đăng nhập (chỉ khi dev và chưa cấu hình Firebase). */
+  guestAllowed: boolean;
   authReady: boolean;
   loading: boolean;
   error: string | null;
@@ -51,7 +53,7 @@ function GoogleLogo() {
   );
 }
 
-export function TitleScreen({ player, cloudEnabled, authReady, loading, error, onLogin, onLogout, onPlay }: Props) {
+export function TitleScreen({ player, cloudEnabled, guestAllowed, authReady, loading, error, onLogin, onLogout, onPlay }: Props) {
   return (
     <div className="app screen title-screen">
       <div className="title-bubbles" aria-hidden="true">
@@ -92,20 +94,22 @@ export function TitleScreen({ player, cloudEnabled, authReady, loading, error, o
               Đăng xuất
             </button>
           </>
-        ) : (
+        ) : cloudEnabled ? (
           <>
-            {cloudEnabled && (
-              <>
-                <button className="btn google wide big" onClick={onLogin}>
-                  <GoogleLogo /> Đăng nhập bằng Google
-                </button>
-                <p className="title-note">Đăng nhập để lưu tiến trình lên mây – đổi máy hay xóa app vẫn không mất.</p>
-              </>
-            )}
-            <button className={`btn wide big ${cloudEnabled ? 'secondary' : 'primary pulse'}`} onClick={onPlay}>
-              ▶ {cloudEnabled ? 'Chơi không cần đăng nhập' : 'Chơi ngay'}
+            <button className="btn google wide big" onClick={onLogin}>
+              <GoogleLogo /> Đăng nhập bằng Gmail
             </button>
+            <p className="title-note">Đăng nhập để vào quán – tiến trình được lưu vào database, đổi máy hay xóa app vẫn không mất.</p>
           </>
+        ) : guestAllowed ? (
+          <>
+            <button className="btn primary wide big pulse" onClick={onPlay}>
+              ▶ Chơi thử (dev)
+            </button>
+            <p className="title-note">Chưa cấu hình Firebase nên không đăng nhập được – bản dev cho chơi thử, chỉ lưu trên máy.</p>
+          </>
+        ) : (
+          <p className="title-error">Game chưa được cấu hình đăng nhập Gmail (Firebase). Vui lòng quay lại sau!</p>
         )}
         {error && <p className="title-error">{error}</p>}
       </div>

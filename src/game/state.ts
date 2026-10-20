@@ -12,6 +12,7 @@ import {
   MAX_DRINKS,
   MAX_SPICE,
   REP_GOOD_REVIEW,
+  REVIEW_LOG_MAX,
   REP_LEFT,
   REP_PERFECT,
   REP_SPICE_BIG_MISS,
@@ -20,6 +21,7 @@ import {
   REVIEW_MAX_MS,
   REVIEW_MIN_MS,
   SAVE_VERSION,
+  SHOP_NAME_MAX,
   SPAWN_BASE_MS,
   SPAWN_BUSY_MUL,
   SPAWN_BUSY_QUEUE,
@@ -42,7 +44,7 @@ import { DIRT_TYPES } from './data/cleaning';
 import { ARCHETYPES } from './data/customers';
 import { INGREDIENT_IDS, INGREDIENTS } from './data/ingredients';
 import { stationIngredients, unlockedDishes, unlockedDrinks } from './data/menu';
-import { FEEDBACK } from './data/reactions';
+import { FEEDBACK, REACTION_STARS } from './data/reactions';
 import { STAFF_TYPES } from './data/staff';
 import { formatVND } from './money';
 import {
@@ -73,6 +75,8 @@ import type {
   IngredientId,
   Reaction,
   Recipe,
+  ReviewEntry,
+  ServiceKind,
   ShopInfo,
   StaffRole,
 } from './types';
@@ -80,10 +84,16 @@ import type {
 export type GameAction =
   | { type: 'TICK'; dt: number }
   | { type: 'CLEAN'; id: number }
+  /** Đổi tên quán – làm được bất cứ lúc nào. */
+  | { type: 'RENAME_SHOP'; name: string }
   | { type: 'OPEN_SHOP' }
   | { type: 'SELECT_CUSTOMER'; id: number }
   | { type: 'ADD_INGREDIENT'; id: IngredientId }
   | { type: 'ADD_CHILI' }
+  /** Bớt 1 phần nguyên liệu (hoặc 1 chai nước) đã bỏ dư – trả lại kho. */
+  | { type: 'REMOVE_INGREDIENT'; id: IngredientId }
+  /** Bớt 1 shot ớt. */
+  | { type: 'REMOVE_CHILI' }
   | { type: 'UNDO' }
   | { type: 'DISCARD' }
   | { type: 'SERVE' }
@@ -149,6 +159,7 @@ export function createInitialState(seed: number, shop: ShopInfo): GameState {
     tables: Array.from({ length: TABLE_COUNT }, () => null),
     tableQueue: [],
     reviews: [],
+    reviewLog: [],
     dirt: generateDirt(rng),
     staff: { cook: 0, waiter: 0, stocker: 0 },
     cooks: [],
@@ -180,6 +191,7 @@ function draft(state: GameState): GameState {
     tables: state.tables.map((d) => d && { ...d }),
     tableQueue: state.tableQueue.map((d) => ({ ...d })),
     reviews: state.reviews.map((r) => ({ ...r })),
+    reviewLog: [...state.reviewLog],
     dirt: state.dirt.map((d) => ({ ...d })),
     staff: { ...state.staff },
     cooks: state.cooks.map((b) => ({ ...b })),
@@ -316,6 +328,17 @@ const REACTION_ICON: Record<Exclude<Reaction, 'bad'>, string> = {
   'not-spicy': '😒',
 };
 
+function serviceOf(order: Pick<Customer['order'], 'channel' | 'dineIn'>): ServiceKind {
+  if (order.channel === 'grab') return 'grab';
+  return order.dineIn ? 'dine-in' : 'takeaway';
+}
+
+/** Ghi một lượt đánh giá vào lịch sử (giữ REVIEW_LOG_MAX lượt gần nhất). */
+function logReview(s: GameState, entry: Omit<ReviewEntry, 'day' | 'stars'>) {
+  s.reviewLog.push({ ...entry, day: s.day, stars: REACTION_STARS[entry.reaction] });
+  if (s.reviewLog.length > REVIEW_LOG_MAX) s.reviewLog.splice(0, s.reviewLog.length - REVIEW_LOG_MAX);
+}
+
 function seatDiners(s: GameState) {
   for (let t = 0; t < s.tables.length && s.tableQueue.length > 0; t++) {
     if (s.tables[t] === null) s.tables[t] = s.tableQueue.shift()!;
@@ -344,6 +367,8 @@ function deliver(s: GameState, customer: Customer, reaction: Exclude<Reaction, '
       id: customer.id,
       name: customer.name,
       look: customer.look,
+      dishId: order.dishId,
+      spice: order.spice,
       reaction,
       feedback,
       paid,
@@ -372,6 +397,8 @@ function deliver(s: GameState, customer: Customer, reaction: Exclude<Reaction, '
     id: customer.id,
     name: customer.name,
     look: customer.look,
+    dishId: order.dishId,
+    spice: order.spice,
     channel: order.channel,
     reaction,
     feedback,
@@ -394,6 +421,7 @@ function finishMeal(s: GameState, table: number) {
   s.tables[table] = null;
   earn(s, d.paid, d.tip);
   changeReputation(s, reputationFor(d.reaction));
+  logReview(s, { id: d.id, name: d.name, look: d.look, service: 'dine-in', dishId: d.dishId, spice: d.spice, reaction: d.reaction, feedback: d.feedback });
   const money = d.reaction === 'delicious' ? `+${formatVND(d.paid)}${d.tip ? ` (tip ${formatVND(d.tip)})` : ''}` : `chỉ trả ${formatVND(d.paid)}`;
   emit(s, {
     type: 'finished',
@@ -409,6 +437,16 @@ function finishMeal(s: GameState, table: number) {
 function deliverReview(s: GameState, index: number) {
   const [r] = s.reviews.splice(index, 1);
   changeReputation(s, r.reaction === 'delicious' ? REP_GOOD_REVIEW : reputationFor(r.reaction));
+  logReview(s, {
+    id: r.id,
+    name: r.name,
+    look: r.look,
+    service: r.channel === 'grab' ? 'grab' : 'takeaway',
+    dishId: r.dishId,
+    spice: r.spice,
+    reaction: r.reaction,
+    feedback: r.feedback,
+  });
   if (r.refund > 0) {
     s.money -= r.refund;
     s.dayStats.refunds += r.refund;
@@ -459,7 +497,7 @@ function tick(s: GameState, dt: number, rng: Rng) {
   s.dayTimeMs = Math.min(DAY_LENGTH_MS, s.dayTimeMs + dt);
   if (s.phase === 'open' && s.dayTimeMs >= DAY_LENGTH_MS) {
     s.phase = 'closing';
-    emit(s, { type: 'info', text: '🌙 Đã tới giờ đóng cửa – phục vụ nốt khách còn lại nhé!' });
+    emit(s, { type: 'info', text: '🌙 Hết giờ nhận khách – phục vụ nốt khách ở quầy, quán đóng cửa khi khách cuối cùng ăn xong.' });
   }
 
   // Khách mới
@@ -574,6 +612,16 @@ function serve(s: GameState, rng: Rng) {
     s.dayStats.wasted += penalty;
     s.dayStats.wrong += 1;
     changeReputation(s, REP_WRONG_DISH);
+    logReview(s, {
+      id: customer.id,
+      name: customer.name,
+      look: customer.look,
+      service: serviceOf(customer.order),
+      dishId: customer.order.dishId,
+      spice: customer.order.spice,
+      reaction,
+      feedback,
+    });
     customer.waitedMs = Math.min(
       customer.patienceMs - 1,
       customer.waitedMs + customer.patienceMs * WRONG_DISH_PATIENCE_PENALTY,
@@ -612,6 +660,17 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (spot.hp <= 0) {
         s.dirt = s.dirt.filter((d) => d.id !== spot.id);
         if (s.dirt.length === 0) emit(s, { type: 'clean', text: '✨ Quán sạch bong! Bấm "Mở cửa" để đón khách.' });
+      }
+      break;
+    }
+
+    case 'RENAME_SHOP': {
+      const name = action.name.trim().slice(0, SHOP_NAME_MAX);
+      if (!name) {
+        emit(s, { type: 'error', text: 'Tên quán không được để trống.' });
+      } else if (name !== s.shop.name) {
+        s.shop = { ...s.shop, name };
+        emit(s, { type: 'info', text: `🪧 Đã đổi tên quán thành "${name}"` });
       }
       break;
     }
@@ -657,6 +716,21 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         s.bowl.steps.push('chili');
       }
       break;
+
+    case 'REMOVE_INGREDIENT': {
+      const index = s.bowl.steps.lastIndexOf(action.id);
+      if (index >= 0) {
+        s.bowl.steps.splice(index, 1);
+        s.inventory[action.id] += 1;
+      }
+      break;
+    }
+
+    case 'REMOVE_CHILI': {
+      const index = s.bowl.steps.lastIndexOf('chili');
+      if (index >= 0) s.bowl.steps.splice(index, 1);
+      break;
+    }
 
     case 'UNDO': {
       // Ớt không tính vào kho; nguyên liệu và nước thì được hoàn lại.

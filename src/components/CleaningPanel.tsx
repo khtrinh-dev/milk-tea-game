@@ -16,7 +16,8 @@ export function CleaningPanel({ state, dispatch }: { state: GameState; dispatch:
         <div className="cleaning-icon" aria-hidden="true">🧹</div>
         <h2>Dọn quán trước giờ mở cửa</h2>
         <p className="hint">
-          Ngày {state.day}: chạm vào từng chỗ bẩn trong quán để dọn. Chỗ có dấu • cần chạm nhiều lần.
+          Ngày {state.day}: kéo cây chổi 🧹 quét qua từng chỗ bẩn trong quán. Chỗ có dấu • phải quét nhiều lượt
+          (đưa chổi ra rồi quét lại).
         </p>
         <div className="progress big" aria-label={`Đã dọn ${done}/${DIRT_SPOTS}`}>
           <div style={{ width: `${(done / DIRT_SPOTS) * 100}%` }} />

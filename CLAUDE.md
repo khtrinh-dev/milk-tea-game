@@ -7,8 +7,8 @@ Hướng dẫn cho Claude Code (và lập trình viên) khi làm việc trong re
 **Mì Cay Tycoon** – game giả lập quán mì cay 2D (dọn quán, nấu mì theo cấp cay 0–7, 10 bàn ăn tại chỗ, mang về,
 đơn Grab), chạy trên trình duyệt và cài được lên iPhone dưới dạng
 **PWA** (Safari → Chia sẻ → Thêm vào MH chính), không cần App Store. Toàn bộ giao diện và nội dung game bằng
-**tiếng Việt**, tiền tệ là **VNĐ**. Giao diện tông đỏ · trắng · đen. Repo trên GitHub tên `milk-tea-game` nên
-`base` URL và key localStorage (`milk-tea-game/...`) giữ tên này – đừng đổi, đổi là mất link game và save người chơi.
+**tiếng Việt**, tiền tệ là **VNĐ**. Giao diện tông đỏ · trắng · đen. Repo GitHub: `khtrinh-dev/my-cay-gem`,
+game chạy tại https://khtrinh-dev.github.io/my-cay-gem/.
 
 Tài liệu chi tiết:
 
@@ -37,7 +37,8 @@ Trước khi báo xong một thay đổi: chạy `npm test` và `npm run build`,
 - **Vitest** cho test logic. **sharp** chỉ dùng trong `scripts/gen-icons.mjs`.
 - Font **Baloo 2** qua `@fontsource` (bundle sẵn, có subset tiếng Việt, chạy offline).
 - Đồ họa: DOM + CSS + emoji + SVG (tô mì `BowlView.tsx`, khách hàng `CustomerFigure.tsx`). Không có canvas/game engine.
-- Đăng nhập Google + lưu mây: Firebase (tải động trong `src/services/cloud.ts`), tắt khi `firebaseConfig.apiKey` trống.
+- **Bắt buộc đăng nhập Gmail**; tiến trình lưu trong **Firestore** `saves/{uid}` (Firebase tải động trong
+  `src/services/cloud.ts`), localStorage chỉ là bản sao offline. Rules ở `firestore.rules`. Cấu hình: `docs/DEPLOYMENT.md` mục 4.
 - Âm thanh: tổng hợp bằng Web Audio (`src/hooks/sound.ts`), không có file âm thanh.
 
 ## Cấu trúc
@@ -92,9 +93,11 @@ src/
 
 ## Lưu ý kỹ thuật
 
-- `vite.config.ts` đặt `base` = `/milk-tea-game/` (GitHub Pages). Deploy chỗ khác thì set `BASE_PATH`.
+- `vite.config.ts` đặt `base` = `/my-cay-gem/` (GitHub Pages). Deploy chỗ khác thì set `BASE_PATH`.
 - iOS chỉ phát âm thanh sau lần chạm đầu tiên → `unlockAudio()` gắn vào `pointerdown`.
 - Game tạm dừng khi mở modal, khi bấm ⏸️ và khi tab bị ẩn; `dt` mỗi tick bị giới hạn 250ms.
-- Autosave mỗi 2 giây và khi `visibilitychange`/`pagehide` (iOS có thể kill PWA bất kỳ lúc nào).
+- Autosave: bản sao trên máy mỗi 2 giây, database mỗi 10 giây + ngay khi đổi ngày/giai đoạn, khi
+  `visibilitychange`/`pagehide` (iOS có thể kill PWA bất kỳ lúc nào) và trước khi thoát/đăng xuất (`flush()`).
+- Thêm field mới vào `GameState` mà không tăng `SAVE_VERSION` thì bổ sung giá trị mặc định trong `migrate()` (`save.ts`).
 - `events` không được lưu vào save; `nextEventId` thì có, để toast không bị lặp sau khi tải lại.
 - Deploy tự động bằng `.github/workflows/deploy.yml` khi push lên `main`.

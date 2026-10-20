@@ -1,18 +1,27 @@
 import { STAFF_UNLOCK_REVENUE } from '../game/constants';
 import { formatShortVND, formatVND } from '../game/money';
 import type { GameState } from '../game/types';
+import type { SyncStatus } from '../hooks/useGame';
 
-export type ModalName = 'stock' | 'recipes' | 'staff' | 'settings';
+export type ModalName = 'stock' | 'recipes' | 'staff' | 'reviews' | 'settings';
 
 interface Props {
   state: GameState;
+  sync: SyncStatus;
   paused: boolean;
   onTogglePause: () => void;
   onOpen: (modal: ModalName) => void;
 }
 
 /** Thanh trên cùng kiểu game: túi tiền, danh tiếng, các nút tròn và thanh "kinh nghiệm" doanh thu. */
-export function Hud({ state, paused, onTogglePause, onOpen }: Props) {
+const SYNC_LABEL: Record<SyncStatus['kind'], string> = {
+  off: 'Chưa đăng nhập – chỉ lưu trên máy',
+  saving: 'Đang lưu vào database…',
+  saved: 'Đã lưu vào database',
+  error: 'Chưa lưu được vào database – sẽ thử lại',
+};
+
+export function Hud({ state, sync, paused, onTogglePause, onOpen }: Props) {
   const progress = Math.min(1, state.totalRevenue / STAFF_UNLOCK_REVENUE);
   const stars = Math.round(state.reputation / 20);
   return (
@@ -31,8 +40,9 @@ export function Hud({ state, paused, onTogglePause, onOpen }: Props) {
           <button className="btn round small" onClick={onTogglePause} aria-label={paused ? 'Tiếp tục' : 'Tạm dừng'}>
             {paused ? '▶' : 'Ⅱ'}
           </button>
-          <button className="btn round small" onClick={() => onOpen('settings')} aria-label="Cài đặt">
+          <button className="btn round small sync-host" onClick={() => onOpen('settings')} aria-label={`Cài đặt. ${SYNC_LABEL[sync.kind]}`}>
             ⚙️
+            <span className={`sync-dot sync-${sync.kind}`} title={SYNC_LABEL[sync.kind]} />
           </button>
         </div>
       </div>
@@ -58,6 +68,10 @@ export function Hud({ state, paused, onTogglePause, onOpen }: Props) {
           <button className="nav-btn" onClick={() => onOpen('staff')}>
             <span>👥</span>
             <small>Nhân sự</small>
+          </button>
+          <button className="nav-btn" onClick={() => onOpen('reviews')}>
+            <span>⭐</span>
+            <small>Đánh giá</small>
           </button>
         </nav>
       </div>

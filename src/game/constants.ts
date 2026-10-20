@@ -52,6 +52,9 @@ export const DINE_MAX_MS = 45_000;
 export const REVIEW_MIN_MS = 8_000;
 export const REVIEW_MAX_MS = 15_000;
 
+/** Số lượt đánh giá gần nhất được giữ lại để xem. */
+export const REVIEW_LOG_MAX = 60;
+
 /** Số chỗ bẩn phải dọn mỗi sáng trước khi mở cửa. */
 export const DIRT_SPOTS = 7;
 

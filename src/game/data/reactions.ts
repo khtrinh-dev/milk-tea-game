@@ -1,5 +1,15 @@
 import type { Reaction } from '../types';
 
+/** Số sao khách chấm theo cảm nhận. */
+export const REACTION_STARS: Record<Reaction, number> = {
+  delicious: 5,
+  spicy: 3,
+  mild: 3,
+  'very-spicy': 2,
+  'not-spicy': 2,
+  bad: 1,
+};
+
 // Câu nhận xét của khách sau khi ăn, chọn ngẫu nhiên theo cảm nhận.
 export const FEEDBACK: Record<Reaction, string[]> = {
   delicious: ['Ngon xuất sắc! 😋', 'Cay vừa chuẩn, mai ghé tiếp!', 'Đỉnh của chóp luôn!', 'Ngon dữ thần, 10 điểm!'],

@@ -226,6 +226,49 @@ h3 {
   background: rgba(255, 255, 255, 0.35);
 }
 
+/* Chấm trạng thái lưu database trên nút cài đặt. */
+.sync-host {
+  position: relative;
+}
+
+.sync-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid var(--black);
+  background: #9e9e9e;
+}
+
+.sync-dot.sync-saved {
+  background: var(--ok);
+}
+
+.sync-dot.sync-saving {
+  background: var(--warn);
+}
+
+.sync-dot.sync-error {
+  background: var(--bad);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.sync-text {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sync-text.sync-saved {
+  color: var(--ok);
+}
+
+.sync-text.sync-error {
+  color: var(--bad);
+}
+
 /* ---------- Màn hình tiêu đề ---------- */
 
 .screen {
@@ -651,7 +694,7 @@ h3 {
   background: #fff;
   color: var(--black);
   border-radius: 12px;
-  width: 52px;
+  width: 47px;
   height: 44px;
   display: flex;
   flex-direction: column;
@@ -733,6 +776,96 @@ h3 {
   border-top: 2px solid var(--black);
   z-index: 3;
   pointer-events: none;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+}
+
+/* Tên quán in trên mặt quầy. */
+.counter-name {
+  color: #ffc531;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 19px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 90%;
+  letter-spacing: 0.5px;
+}
+
+/* Chổi quét lúc dọn quán. */
+.broom-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  touch-action: none;
+  cursor: grab;
+}
+
+.broom {
+  position: absolute;
+  pointer-events: none;
+  /* đầu chổi (dưới cùng) nằm đúng chỗ ngón tay */
+  transform: translate(-50%, -92%) rotate(-12deg);
+  transform-origin: 50% 92%;
+  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.3));
+}
+
+.broom.idle {
+  right: 4%;
+  bottom: 30px;
+  transform: rotate(-12deg);
+  animation: wobble 1.4s ease-in-out infinite;
+}
+
+.broom.held {
+  animation: sweep 0.28s ease-in-out infinite alternate;
+}
+
+.broom-hint {
+  position: absolute;
+  right: 2%;
+  bottom: 8px;
+  background: var(--black);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 1px 6px;
+  pointer-events: none;
+}
+
+.sweep-puff {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.sweep-puff i {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -7px;
+  border-radius: 50%;
+  background: rgba(190, 170, 150, 0.85);
+  animation: puff 0.6s ease-out forwards;
+}
+
+.sweep-puff i:nth-child(1) {
+  --dx: -22px;
+  --dy: -14px;
+}
+
+.sweep-puff i:nth-child(2) {
+  --dx: 20px;
+  --dy: -18px;
+}
+
+.sweep-puff i:nth-child(3) {
+  --dx: 4px;
+  --dy: 16px;
 }
 
 .lantern {
@@ -747,26 +880,6 @@ h3 {
   box-shadow: 0 0 14px rgba(255, 70, 40, 0.6);
 }
 
-.shop-sign {
-  position: absolute;
-  top: 5px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--theme-dark);
-  color: #fff;
-  padding: 0 10px;
-  border-radius: 8px;
-  font-weight: 700;
-  font-size: 12px;
-  line-height: 20px;
-  border: 2px solid var(--black);
-  white-space: nowrap;
-  max-width: 38%;
-  z-index: 6;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  box-shadow: 0 0 0 2px #ffc531 inset;
-}
 
 .scene-hud {
   flex-direction: column;
@@ -964,6 +1077,8 @@ h3 {
   color: #fff;
   text-shadow: 0 1px 3px #000;
   z-index: 2;
+  padding: 0 10px;
+  font-size: 13px;
 }
 
 /* Dọn dẹp buổi sáng */
@@ -976,6 +1091,7 @@ h3 {
   position: absolute;
   transform: translate(-50%, -50%);
   z-index: 7;
+  pointer-events: none;
   border: none;
   background: radial-gradient(circle, rgba(255, 255, 255, 0.85) 0 40%, rgba(255, 255, 255, 0) 70%);
   width: 44px;
@@ -989,8 +1105,8 @@ h3 {
   animation: wobble 1.6s ease-in-out infinite;
 }
 
-.dirt:active {
-  transform: translate(-50%, -50%) scale(0.85);
+.dirt.hit {
+  animation: dirt-hit 0.35s ease-out;
 }
 
 .dirt.dirt-dishes {
@@ -1574,11 +1690,55 @@ h3 {
   color: #ffc531;
 }
 
-.ing-grid {
+/* Quầy chia cụm: Mì | Thịt · Hải sản (hàng 1) và Rau | Nước uống (hàng 2). */
+.ing-groups {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
-  gap: 5px;
+  gap: 6px 5px;
   margin-top: 6px;
+}
+
+.ing-group {
+  border: 2px solid var(--black);
+  border-radius: 12px;
+  padding: 2px 3px 4px;
+  min-width: 0;
+}
+
+.group-noodle {
+  background: #fff3c4;
+}
+
+.group-meat {
+  background: #ffe1dc;
+}
+
+.group-veggie {
+  background: #e4f5dc;
+}
+
+.group-drink {
+  background: #e3ecff;
+}
+
+.ing-group-title {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  padding-left: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ing-grid {
+  display: grid;
+  gap: 4px;
+}
+
+.checklist li.kind-drink:not(.ok):not(.bad) {
+  color: #2f5fb8;
 }
 
 .ing-btn {
@@ -1592,6 +1752,62 @@ h3 {
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
   min-height: 60px;
   padding: 3px 1px 2px;
+}
+
+/* Nút bớt 1 phần đã bỏ vào tô (góc trên phải mỗi nguyên liệu). */
+.ing-cell {
+  position: relative;
+  min-width: 0;
+  display: flex;
+}
+
+.ing-cell .ing-btn {
+  flex: 1;
+  min-width: 0;
+}
+
+.ing-minus {
+  position: absolute;
+  top: -7px;
+  right: -5px;
+  min-width: 30px;
+  height: 26px;
+  padding: 0 5px;
+  border: 2px solid var(--black);
+  border-radius: 13px;
+  background: var(--black);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  z-index: 1;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+}
+
+.ing-minus.over {
+  background: var(--red);
+}
+
+.ing-minus:active {
+  transform: scale(0.92);
+}
+
+.chili-row {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.chili-row .chili-jar {
+  flex: 1;
+  min-width: 0;
+}
+
+.chili-minus {
+  width: 56px;
+  padding: 0;
+  font-size: 15px;
+  border-radius: 14px;
 }
 
 .ing-btn.kind-drink {
@@ -1659,6 +1875,123 @@ h3 {
   flex: 1.4;
   font-size: 16px;
   border-color: #fff;
+}
+
+/* ---------- Tab đánh giá ---------- */
+
+.review-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.review-summary div {
+  display: flex;
+  flex-direction: column;
+}
+
+.review-summary small {
+  color: var(--muted);
+}
+
+.review-avg {
+  font-size: 34px;
+  line-height: 1;
+  color: var(--red);
+}
+
+.review-stars {
+  color: #d8d0cf;
+  letter-spacing: -1px;
+  white-space: nowrap;
+}
+
+.review-stars .on {
+  color: #f2a516;
+}
+
+.review-filter {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.chip {
+  flex: 1;
+  border: 2px solid var(--black);
+  background: #fff;
+  border-radius: 999px;
+  padding: 4px 6px;
+  font-size: 13px;
+  font-weight: 700;
+  min-height: 36px;
+}
+
+.chip.active {
+  background: var(--black);
+  color: #fff;
+}
+
+.review-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.review-item {
+  display: flex;
+  gap: 8px;
+  background: #fff;
+  border: 1.5px solid var(--line);
+  border-left: 5px solid var(--ok);
+  border-radius: 12px;
+  padding: 6px 8px;
+}
+
+.review-item.stars-3,
+.review-item.stars-2 {
+  border-left-color: var(--warn);
+}
+
+.review-item.stars-1 {
+  border-left-color: var(--bad);
+}
+
+/* Chỉ hiện nửa trên nhân vật (chân dung) để thấy rõ biểu cảm. */
+.review-face {
+  width: 40px;
+  height: 36px;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.review-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.review-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.review-text {
+  margin: 1px 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.review-body small {
+  color: var(--muted);
+  font-size: 11.5px;
 }
 
 /* ---------- Toast ---------- */
@@ -2073,6 +2406,35 @@ h3 {
   }
   50% {
     rotate: 6deg;
+  }
+}
+
+@keyframes sweep {
+  from {
+    transform: translate(-50%, -92%) rotate(-24deg);
+  }
+  to {
+    transform: translate(-50%, -92%) rotate(8deg);
+  }
+}
+
+@keyframes puff {
+  from {
+    transform: translate(0, 0) scale(0.4);
+    opacity: 1;
+  }
+  to {
+    transform: translate(var(--dx), var(--dy)) scale(1.6);
+    opacity: 0;
+  }
+}
+
+@keyframes dirt-hit {
+  0% {
+    transform: translate(-50%, -50%) scale(1.25) rotate(-12deg);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
   }
 }
 

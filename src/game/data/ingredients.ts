@@ -11,11 +11,11 @@ function ingredient(id: IngredientId, name: string, emoji: string, kind: Ingredi
 export const INGREDIENTS: Record<IngredientId, Ingredient> = {
   noodle: ingredient('noodle', 'Mì', '🍜', 'noodle', '#f3c64f', 15_000),
 
-  squid: ingredient('squid', 'Mực', '🦑', 'topping', '#f7ece0', 10_000),
-  shrimp: ingredient('shrimp', 'Tôm', '🦐', 'topping', '#ff8a4c', 15_000),
-  fishball: ingredient('fishball', 'Cá viên chiên', '🍢', 'topping', '#c98a45', 10_000),
-  beef: ingredient('beef', 'Bò', '🥩', 'topping', '#a8433a', 30_000),
-  sausage: ingredient('sausage', 'Xúc xích', '🌭', 'topping', '#e0584a', 10_000),
+  squid: ingredient('squid', 'Mực', '🦑', 'meat', '#f7ece0', 10_000),
+  shrimp: ingredient('shrimp', 'Tôm', '🦐', 'meat', '#ff8a4c', 15_000),
+  fishball: ingredient('fishball', 'Cá viên chiên', '🍢', 'meat', '#c98a45', 10_000),
+  beef: ingredient('beef', 'Bò', '🥩', 'meat', '#a8433a', 30_000),
+  sausage: ingredient('sausage', 'Xúc xích', '🌭', 'meat', '#e0584a', 10_000),
 
   kimchi: ingredient('kimchi', 'Kim chi', '🥬', 'veggie', '#e2452f', 5_000),
   enoki: ingredient('enoki', 'Nấm kim châm', '🍄', 'veggie', '#f6f0dc', 10_000),

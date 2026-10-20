@@ -1,7 +1,9 @@
 import { SAVE_VERSION } from './constants';
 import type { GameState } from './types';
 
-const GUEST_KEY = 'milk-tea-game/save';
+const GUEST_KEY = 'my-cay-gem/save';
+/** Key của bản trước khi đổi tên repo – vẫn đọc để không mất tiến trình đã lưu trên máy. */
+const LEGACY_KEY = 'milk-tea-game/save';
 
 /** Một bản lưu: state + thời điểm lưu (ms, do UI cung cấp) để so bản trên máy với bản trên mây. */
 export interface SaveFile {
@@ -14,13 +16,26 @@ export function saveKey(uid: string | null): string {
   return uid ? `${GUEST_KEY}/${uid}` : GUEST_KEY;
 }
 
+function legacySaveKey(uid: string | null): string {
+  return uid ? `${LEGACY_KEY}/${uid}` : LEGACY_KEY;
+}
+
 /**
  * Đưa save phiên bản cũ lên phiên bản hiện tại. Trả về null nếu không chuyển được.
  * v1, v2 là cấu trúc save cũ không còn tương thích – không chuyển, người chơi mở quán mới.
+ * v3 được bổ sung giá trị mặc định cho các field thêm sau.
  */
 function migrate(data: GameState & { version: number }): GameState | null {
-  if (data.version === SAVE_VERSION) return data;
-  return null;
+  if (data.version !== SAVE_VERSION) return null;
+  // Field thêm sau khi v3 đã phát hành: lịch sử đánh giá, món + cấp cay của khách đang ăn / chờ đánh giá.
+  const withOrder = <T extends { dishId?: string; spice?: number }>(x: T) => ({ ...x, dishId: x.dishId ?? 'kimchi', spice: x.spice ?? 0 });
+  return {
+    ...data,
+    reviewLog: data.reviewLog ?? [],
+    tables: data.tables.map((d) => d && withOrder(d)),
+    tableQueue: data.tableQueue.map(withOrder),
+    reviews: data.reviews.map(withOrder),
+  };
 }
 
 /** Đọc chuỗi JSON (từ localStorage hoặc từ mây) thành SaveFile. Hỏng → null. */
@@ -46,7 +61,7 @@ export function serializeSave(state: GameState, savedAt: number): string {
 /** Đọc save trên máy. Không có, hỏng hoặc không chuyển được phiên bản → null. */
 export function loadGame(uid: string | null = null): SaveFile | null {
   try {
-    return parseSave(localStorage.getItem(saveKey(uid)));
+    return parseSave(localStorage.getItem(saveKey(uid)) ?? localStorage.getItem(legacySaveKey(uid)));
   } catch {
     return null;
   }

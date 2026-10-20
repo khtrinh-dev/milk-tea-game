@@ -23,6 +23,13 @@ describe('save', () => {
     expect(parseSave(serializeSave(current, 5))?.state.version).toBe(SAVE_VERSION);
   });
 
+  it('save v3 cũ chưa có lịch sử đánh giá vẫn đọc được', () => {
+    const current = createInitialState(1, SHOP);
+    const { reviewLog: _log, ...old } = current;
+    const file = parseSave(JSON.stringify({ state: old, savedAt: 1 }));
+    expect(file?.state.reviewLog).toEqual([]);
+  });
+
   it('bỏ qua save hỏng hoặc phiên bản lạ', () => {
     expect(parseSave('{oops')).toBeNull();
     expect(parseSave(JSON.stringify({ version: 99 }))).toBeNull();
@@ -39,7 +46,7 @@ describe('save', () => {
   });
 
   it('mỗi tài khoản một ô lưu, khách dùng key cũ', () => {
-    expect(saveKey(null)).toBe('milk-tea-game/save');
-    expect(saveKey('abc')).toBe('milk-tea-game/save/abc');
+    expect(saveKey(null)).toBe('my-cay-gem/save');
+    expect(saveKey('abc')).toBe('my-cay-gem/save/abc');
   });
 });

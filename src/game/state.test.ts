@@ -64,7 +64,7 @@ function lastEvent<T extends GameEvent['type']>(s: GameState, type: T) {
 }
 
 function dummyDiner(id: number): Diner {
-  return { id, name: 'Test', look: { archetype: 'dev', skin: 0, hair: 0 }, reaction: 'delicious', feedback: 'Ngon', paid: 75_000, tip: 0, eatMs: 1e9 };
+  return { id, name: 'Test', look: { archetype: 'dev', skin: 0, hair: 0 }, dishId: 'kimchi', spice: 2, reaction: 'delicious', feedback: 'Ngon', paid: 75_000, tip: 0, eatMs: 1e9 };
 }
 
 /** State đã đủ doanh thu thuê nhân viên và kho đầy mọi nguyên liệu. */
@@ -262,6 +262,23 @@ describe('gameReducer', () => {
     expect(s.bowl.steps).toHaveLength(0);
   });
 
+  it('bỏ dư thì bớt được từng phần (trả lại kho) và bớt được shot ớt', () => {
+    const s0 = createInitialState(1, SHOP);
+    let s = run(
+      s0,
+      { type: 'ADD_INGREDIENT', id: 'beef' },
+      { type: 'ADD_INGREDIENT', id: 'noodle' },
+      { type: 'ADD_INGREDIENT', id: 'beef' },
+      { type: 'ADD_CHILI' },
+      { type: 'ADD_CHILI' },
+    );
+    s = run(s, { type: 'REMOVE_INGREDIENT', id: 'beef' }, { type: 'REMOVE_CHILI' });
+    expect(s.bowl.steps).toEqual(['beef', 'noodle', 'chili']);
+    expect(s.inventory.beef).toBe(s0.inventory.beef - 1);
+    // bớt thứ không có trong tô thì không đổi gì
+    expect(run(s, { type: 'REMOVE_INGREDIENT', id: 'shrimp' }).bowl).toEqual(s.bowl);
+  });
+
   it('hũ ớt tối đa 7 shot', () => {
     const s = run(createInitialState(1, SHOP), ...Array.from({ length: MAX_SPICE + 1 }, () => ({ type: 'ADD_CHILI' }) as GameAction));
     expect(s.bowl.steps.filter((x) => x === 'chili')).toHaveLength(MAX_SPICE);
@@ -289,6 +306,15 @@ describe('gameReducer', () => {
 
   it('lưu tên quán khi tạo game mới', () => {
     expect(createInitialState(1, SHOP).shop).toEqual(SHOP);
+  });
+
+  it('đổi tên quán bất cứ lúc nào, bỏ khoảng trắng thừa, không cho tên trống', () => {
+    const s0 = openShop(createInitialState(1, SHOP));
+    const s = run(s0, { type: 'RENAME_SHOP', name: '  Mì Cay Cấp 7  ' });
+    expect(s.shop).toEqual({ ...SHOP, name: 'Mì Cay Cấp 7' });
+    const blank = run(s, { type: 'RENAME_SHOP', name: '   ' });
+    expect(blank.shop.name).toBe('Mì Cay Cấp 7');
+    expect(blank.events.at(-1)?.type).toBe('error');
   });
 
   it('nhập hàng trừ tiền và cộng kho, thiếu tiền thì báo lỗi', () => {

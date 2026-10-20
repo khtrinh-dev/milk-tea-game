@@ -15,8 +15,8 @@ export type IngredientId =
   | 'coca'
   | 'milk';
 
-/** noodle = mì, topping = đồ nhúng (hải sản, thịt, viên), veggie = rau/nấm/kim chi, drink = nước uống kèm. */
-export type IngredientKind = 'noodle' | 'topping' | 'veggie' | 'drink';
+/** noodle = mì, meat = thịt · hải sản · viên, veggie = rau · nấm · kim chi, drink = nước uống kèm. */
+export type IngredientKind = 'noodle' | 'meat' | 'veggie' | 'drink';
 
 export interface Ingredient {
   id: IngredientId;
@@ -135,6 +135,8 @@ export interface Diner {
   id: number;
   name: string;
   look: CustomerLook;
+  dishId: string;
+  spice: number;
   reaction: Exclude<Reaction, 'bad'>;
   feedback: string;
   /** Tiền món và tip khách sẽ trả khi ăn xong. */
@@ -149,11 +151,31 @@ export interface PendingReview {
   id: number;
   name: string;
   look: CustomerLook;
+  dishId: string;
+  spice: number;
   channel: OrderChannel;
   reaction: Exclude<Reaction, 'bad'>;
   feedback: string;
   refund: number;
   inMs: number;
+}
+
+export type ServiceKind = 'dine-in' | 'takeaway' | 'grab';
+
+/** Một lượt đánh giá của khách – lưu lại để xem ở tab Đánh giá. */
+export interface ReviewEntry {
+  id: number;
+  day: number;
+  name: string;
+  look: CustomerLook;
+  service: ServiceKind;
+  dishId: string;
+  /** Cấp cay khách gọi. */
+  spice: number;
+  reaction: Reaction;
+  feedback: string;
+  /** 1–5 sao. */
+  stars: number;
 }
 
 export type DirtKind = 'trash' | 'stain' | 'web' | 'dishes' | 'dust';
@@ -273,6 +295,8 @@ export interface GameState {
   /** Khách ăn tại chỗ đã nhận tô nhưng hết bàn, đang đứng chờ. */
   tableQueue: Diner[];
   reviews: PendingReview[];
+  /** Lịch sử đánh giá gần đây (mới nhất ở cuối). */
+  reviewLog: ReviewEntry[];
   dirt: DirtSpot[];
   staff: Record<StaffRole, number>;
   cooks: Cook[];

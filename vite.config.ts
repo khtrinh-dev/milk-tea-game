@@ -3,9 +3,9 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
-// GitHub Pages phục vụ game tại https://<user>.github.io/milk-tea-game/
+// GitHub Pages phục vụ game tại https://<user>.github.io/my-cay-gem/
 // nên base phải khớp tên repo. Đổi biến môi trường BASE_PATH nếu deploy chỗ khác.
-const base = process.env.BASE_PATH ?? '/milk-tea-game/';
+const base = process.env.BASE_PATH ?? '/my-cay-gem/';
 
 export default defineConfig({
   base,

@@ -13,6 +13,7 @@ import { HowToPlay } from './HelpContent';
 import { Hud, type ModalName } from './Hud';
 import { Modal } from './Modal';
 import { RecipeModal } from './RecipeModal';
+import { ReviewsModal } from './ReviewsModal';
 import { SettingsModal } from './SettingsModal';
 import { ShopScene } from './ShopScene';
 import { StaffModal } from './StaffModal';
@@ -22,7 +23,7 @@ import { Workstation } from './Workstation';
 
 const TOAST_MS = 2_800;
 const MAX_TOASTS = 2;
-const TUTORIAL_KEY = 'milk-tea-game/tutorial-spicy-v1-seen';
+const TUTORIAL_KEY = 'my-cay-gem/tutorial-v1-seen';
 
 const SOUND_FOR: Partial<Record<GameEvent['type'], Parameters<typeof playSound>[0]>> = {
   'new-order': 'order',
@@ -42,6 +43,8 @@ const SOUND_FOR_ACTION: Partial<Record<GameAction['type'], Parameters<typeof pla
   CLEAN: 'scrub',
   UNDO: 'pop',
   DISCARD: 'trash',
+  REMOVE_INGREDIENT: 'pop',
+  REMOVE_CHILI: 'pop',
 };
 
 interface Props {
@@ -61,7 +64,12 @@ export function GameScreen({ initialState, player, muted, onToggleMute, onExit, 
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const paused = userPaused || modal !== null || showTutorial;
-  const [state, rawDispatch] = useGame(initialState, player?.uid ?? null, paused);
+  const [state, rawDispatch, sync, flush] = useGame(initialState, player, paused);
+
+  // Ghi database xong rồi mới thoát / đăng xuất, để không mất tiến trình mới nhất.
+  const saveThen = (next: () => void) => () => {
+    void flush().finally(next);
+  };
 
   const dispatch = useCallback(
     (action: GameAction) => {
@@ -92,7 +100,7 @@ export function GameScreen({ initialState, player, muted, onToggleMute, onExit, 
 
   return (
     <div className="app game" data-theme={state.shop.theme}>
-      <Hud state={state} paused={userPaused} onTogglePause={() => setUserPaused((p) => !p)} onOpen={setModal} />
+      <Hud state={state} sync={sync} paused={userPaused} onTogglePause={() => setUserPaused((p) => !p)} onOpen={setModal} />
       <ShopScene state={state} dispatch={dispatch} />
       {state.phase === 'prep' ? <CleaningPanel state={state} dispatch={dispatch} /> : <Workstation state={state} dispatch={dispatch} />}
       <Toasts toasts={toasts} />
@@ -107,13 +115,17 @@ export function GameScreen({ initialState, player, muted, onToggleMute, onExit, 
       {modal === 'stock' && <StockModal state={state} dispatch={dispatch} onClose={() => setModal(null)} />}
       {modal === 'recipes' && <RecipeModal state={state} onClose={() => setModal(null)} />}
       {modal === 'staff' && <StaffModal state={state} dispatch={dispatch} onClose={() => setModal(null)} />}
+      {modal === 'reviews' && <ReviewsModal state={state} onClose={() => setModal(null)} />}
       {modal === 'settings' && (
         <SettingsModal
           player={player}
+          shopName={state.shop.name}
+          onRename={(name) => dispatch({ type: 'RENAME_SHOP', name })}
+          sync={sync}
           muted={muted}
           onToggleMute={onToggleMute}
-          onExit={onExit}
-          onLogout={onLogout}
+          onExit={saveThen(onExit)}
+          onLogout={saveThen(onLogout)}
           onReset={onReset}
           onClose={() => setModal(null)}
         />
