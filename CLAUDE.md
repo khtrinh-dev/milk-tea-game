@@ -37,7 +37,8 @@ Trước khi báo xong một thay đổi: chạy `npm test` và `npm run build`,
 - **Vitest** cho test logic. **sharp** chỉ dùng trong `scripts/gen-icons.mjs`.
 - Font **Baloo 2** qua `@fontsource` (bundle sẵn, có subset tiếng Việt, chạy offline).
 - Đồ họa: DOM + CSS + emoji + SVG (tô mì `BowlView.tsx`, khách hàng `CustomerFigure.tsx`). Không có canvas/game engine.
-- **Bắt buộc đăng nhập Gmail**; tiến trình lưu trong **Firestore** `saves/{uid}` (Firebase tải động trong
+- **Bắt buộc đăng nhập Gmail** (tạm thời bỏ qua khi `firebaseConfig.apiKey` trống – xem `GUEST_ALLOWED` trong `App.tsx`);
+  tiến trình lưu trong **Firestore** `saves/{uid}` (Firebase tải động trong
   `src/services/cloud.ts`), localStorage chỉ là bản sao offline. Rules ở `firestore.rules`. Cấu hình: `docs/DEPLOYMENT.md` mục 4.
 - Âm thanh: tổng hợp bằng Web Audio (`src/hooks/sound.ts`), không có file âm thanh.
 

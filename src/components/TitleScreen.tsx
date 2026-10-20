@@ -104,9 +104,9 @@ export function TitleScreen({ player, cloudEnabled, guestAllowed, authReady, loa
         ) : guestAllowed ? (
           <>
             <button className="btn primary wide big pulse" onClick={onPlay}>
-              ▶ Chơi thử (dev)
+              ▶ Chơi ngay
             </button>
-            <p className="title-note">Chưa cấu hình Firebase nên không đăng nhập được – bản dev cho chơi thử, chỉ lưu trên máy.</p>
+            <p className="title-note">Tạm thời chưa có đăng nhập Gmail – tiến trình được lưu trên máy này.</p>
           </>
         ) : (
           <p className="title-error">Game chưa được cấu hình đăng nhập Gmail (Firebase). Vui lòng quay lại sau!</p>

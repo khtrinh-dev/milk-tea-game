@@ -14,10 +14,12 @@ const MUTED_KEY = 'my-cay-gem/muted';
 /** Không chờ Firebase quá lâu ở màn hình đầu (mạng yếu) – hiện nút đăng nhập luôn. */
 const AUTH_WAIT_MS = 5_000;
 /**
- * Bắt buộc đăng nhập Google để chơi (tiến trình lưu trong database Firestore).
- * Chỉ khi chạy dev mà chưa cấu hình Firebase mới cho chơi thử không đăng nhập.
+ * Bắt buộc đăng nhập Google để chơi (tiến trình lưu trong database Firestore) – khi đã cấu hình Firebase.
+ * TẠM THỜI: chưa cấu hình Firebase thì cho chơi không đăng nhập (chỉ lưu trên máy), kể cả bản deploy.
+ * Điền firebaseConfig là tự bắt buộc đăng nhập lại. Muốn chặn hẳn khi thiếu config thì đổi thành:
+ *   const GUEST_ALLOWED = !isCloudEnabled && import.meta.env.DEV;
  */
-const GUEST_ALLOWED = !isCloudEnabled && import.meta.env.DEV;
+const GUEST_ALLOWED = !isCloudEnabled;
 
 type Screen =
   | { kind: 'title' }

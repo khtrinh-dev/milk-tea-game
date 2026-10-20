@@ -53,9 +53,13 @@ nên chế độ offline chỉ kiểm tra được trên bản deploy.)
 
 ## 4. Cấu hình đăng nhập Gmail + database (bắt buộc)
 
-Game **bắt buộc đăng nhập Gmail** và lưu tiến trình vào **Firestore**. Khi `src/services/firebaseConfig.ts` còn trống
-`apiKey`, bản build sẽ chỉ hiện thông báo "Game chưa được cấu hình đăng nhập" (riêng `npm run dev` cho chơi thử để
-code giao diện). Cấu hình một lần:
+Game **bắt buộc đăng nhập Gmail** và lưu tiến trình vào **Firestore** khi đã cấu hình Firebase.
+
+> **Tạm thời** (đến khi điền config): `src/services/firebaseConfig.ts` còn trống `apiKey` nên game cho chơi ngay không
+> cần đăng nhập, tiến trình chỉ lưu trên máy (`GUEST_ALLOWED` trong `src/App.tsx`). Điền config xong là tự bắt buộc
+> đăng nhập lại, không cần sửa code.
+
+Cấu hình một lần:
 
 1. Tạo project tại [Firebase Console](https://console.firebase.google.com) → **Add app → Web** → copy cấu hình
    (`apiKey`, `authDomain`, `projectId`, `storageBucket`, `messagingSenderId`, `appId`) vào `firebaseConfig.ts`.
