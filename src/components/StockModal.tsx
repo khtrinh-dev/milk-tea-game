@@ -1,6 +1,6 @@
 import type { Dispatch } from 'react';
 import { INGREDIENT_IDS, INGREDIENTS, unitCost } from '../game/data/ingredients';
-import { unlockedIngredients } from '../game/data/menu';
+import { stationIngredients } from '../game/data/menu';
 import { formatVND } from '../game/money';
 import type { GameAction } from '../game/state';
 import type { GameState, IngredientId } from '../game/types';
@@ -13,13 +13,13 @@ interface Props {
 }
 
 export function StockModal({ state, dispatch, onClose }: Props) {
-  const inUse = new Set<IngredientId>(['cup', ...unlockedIngredients(state.totalRevenue)]);
+  const inUse = new Set<IngredientId>(stationIngredients(state.totalRevenue));
   const sorted = [...INGREDIENT_IDS].sort((a, b) => Number(inUse.has(b)) - Number(inUse.has(a)));
 
   return (
     <Modal title="📦 Kho · Nhập nguyên liệu" onClose={onClose}>
       <p className="modal-note">
-        Tiền mặt: <b>{formatVND(state.money)}</b>. Mỗi lần bấm nguyên liệu ở quầy dùng 1 phần; mỗi ly giao đi dùng 1 ly nhựa.
+        Tiền mặt: <b>{formatVND(state.money)}</b>. Mỗi lần chạm nguyên liệu ở quầy dùng 1 phần. Ớt thì miễn phí.
       </p>
       <ul className="stock-list">
         {sorted.map((id) => {

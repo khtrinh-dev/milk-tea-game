@@ -1,13 +1,17 @@
+import { MAX_SPICE } from '../game/constants';
+
 export function HowToPlay() {
   return (
     <ol className="howto">
-      <li>🔔 Khách tới quầy sẽ gọi món – có thông báo đơn mới. <b>Chạm vào khách</b> để chọn đơn.</li>
-      <li>📋 Thẻ đơn hiện công thức, ví dụ <i>1 🍵 Matcha + 1 🥛 Sữa tươi + 1 ⚪ Trân châu trắng</i>.</li>
-      <li>👆 <b>Chạm vào từng nguyên liệu</b> đúng số lần, rồi chọn mức 🧊 đá và 🍬 đường theo yêu cầu.</li>
-      <li>✅ Bấm <b>Giao món</b>. Đúng hết: nhận tiền + tip. Sai đá/đường: khách trả 70%. Sai món: khách không nhận.</li>
+      <li>🧹 Mỗi sáng phải <b>dọn quán</b>: chạm vào rác, vết dầu ớt, mạng nhện, chén bẩn… dọn sạch mới bấm được <b>Mở cửa</b>.</li>
+      <li>🔔 Khách vào quán hoặc 🛵 tài xế Grab tới lấy đơn, gọi món + cấp độ cay (🌶️0 → 🌶️{MAX_SPICE}), có khi thêm 🥤 Coca hoặc 🥛 Sữa. <b>Chạm vào khách</b> để chọn đơn.</li>
+      <li>🪑 Khách <b>ăn tại chỗ</b> ngồi 1 trong 10 bàn (hết bàn thì đứng chờ), ăn xong mới nhận xét và trả tiền. 🛍️ Khách <b>mang về</b> / Grab trả tiền ngay, về nhà ăn rồi đánh giá – chê độ cay thì quán phải hoàn bớt tiền.</li>
+      <li>📋 Thẻ đơn hiện công thức, ví dụ <i>🍜 Mì + 🥬 Kim chi + 🥩 Bò + 🥦 Súp lơ + 🍄 Nấm kim châm + 🌭 Xúc xích</i>.</li>
+      <li>👆 <b>Chạm từng nguyên liệu</b> để bỏ vào tô, rồi chạm <b>Hũ ớt</b> đúng số shot = cấp cay (cấp 0 thì không cho ớt).</li>
+      <li>🍜 Bấm <b>Giao món</b>. Khách ăn xong sẽ nhận xét: đúng độ cay thì khen ngon + tip 😋; cay quá thì đỏ bừng mặt 🥵, không đủ cay thì mặt khinh 😒 – cả hai đều trả ít tiền hơn.</li>
+      <li>❌ Bỏ thiếu/thừa nguyên liệu hay quên nước: khách chê dở 😞, <b>tô bị bỏ và bạn bị trừ tiền</b> bằng giá vốn nguyên liệu trong tô.</li>
       <li>⏳ Khách chờ lâu sẽ bỏ về và quán mất danh tiếng ⭐.</li>
-      <li>📦 Nguyên liệu dùng là hết – vào <b>Kho</b> để nhập hàng (tốn tiền).</li>
-      <li>📈 Doanh thu càng cao càng mở khóa thêm món mới. Đạt <b>10 triệu</b> doanh thu sẽ thuê được nhân viên 👥.</li>
+      <li>📦 Nguyên liệu dùng là hết – vào <b>Kho</b> để nhập hàng. Doanh thu cao sẽ mở khóa món mới; đạt <b>10 triệu</b> thuê được nhân viên 👥.</li>
     </ol>
   );
 }
@@ -18,7 +22,7 @@ export function InstallGuide() {
       <li>Mở game bằng <b>Safari</b> trên iPhone.</li>
       <li>Bấm nút <b>Chia sẻ</b> (ô vuông có mũi tên ↑).</li>
       <li>Chọn <b>“Thêm vào MH chính”</b> (Add to Home Screen).</li>
-      <li>Mở game từ biểu tượng 🧋 trên màn hình chính – chơi toàn màn hình, cả khi offline.</li>
+      <li>Mở game từ biểu tượng 🍜 trên màn hình chính – chơi toàn màn hình, cả khi offline.</li>
     </ol>
   );
 }

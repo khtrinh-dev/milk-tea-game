@@ -1,35 +1,34 @@
-import type { Ingredient, IngredientId } from '../types';
+import type { Ingredient, IngredientId, IngredientKind } from '../types';
 
-// Giá nhập tính theo gói. Giá vốn một phần = packPrice / packSize.
+/** Mỗi gói nhập hàng có 10 phần. */
+const PACK_SIZE = 10;
+
+/** Khai báo nguyên liệu theo giá vốn một phần; giá gói = giá phần × số phần. */
+function ingredient(id: IngredientId, name: string, emoji: string, kind: IngredientKind, color: string, unitPrice: number): Ingredient {
+  return { id, name, emoji, kind, color, packSize: PACK_SIZE, packPrice: unitPrice * PACK_SIZE };
+}
+
 export const INGREDIENTS: Record<IngredientId, Ingredient> = {
-  cup: { id: 'cup', name: 'Ly + nắp + ống hút', emoji: '🥤', kind: 'supply', color: '#ffffff', packSize: 50, packPrice: 150_000 },
+  noodle: ingredient('noodle', 'Mì', '🍜', 'noodle', '#f3c64f', 15_000),
 
-  black_tea: { id: 'black_tea', name: 'Hồng trà', emoji: '🫖', kind: 'tea', color: '#9a4a1f', packSize: 30, packPrice: 90_000 },
-  green_tea: { id: 'green_tea', name: 'Trà xanh nhài', emoji: '🍃', kind: 'tea', color: '#b5c96a', packSize: 30, packPrice: 90_000 },
-  oolong: { id: 'oolong', name: 'Trà ô long', emoji: '🍂', kind: 'tea', color: '#c58b3c', packSize: 30, packPrice: 120_000 },
-  matcha: { id: 'matcha', name: 'Bột matcha', emoji: '🍵', kind: 'flavor', color: '#6f9a3a', packSize: 20, packPrice: 140_000 },
-  taro: { id: 'taro', name: 'Bột khoai môn', emoji: '🍠', kind: 'flavor', color: '#a77fc7', packSize: 20, packPrice: 100_000 },
-  cocoa: { id: 'cocoa', name: 'Bột cacao', emoji: '🍫', kind: 'flavor', color: '#5b3a24', packSize: 20, packPrice: 100_000 },
-  milk: { id: 'milk', name: 'Sữa tươi', emoji: '🥛', kind: 'milk', color: '#f7f3ea', packSize: 20, packPrice: 100_000 },
-  creamer: { id: 'creamer', name: 'Bột kem béo', emoji: '🍶', kind: 'milk', color: '#eadcc0', packSize: 40, packPrice: 120_000 },
-  brown_sugar: { id: 'brown_sugar', name: 'Đường đen', emoji: '🍯', kind: 'flavor', color: '#6b3415', packSize: 30, packPrice: 90_000 },
-  passion: { id: 'passion', name: 'Chanh dây', emoji: '🍋', kind: 'flavor', color: '#f2c230', packSize: 20, packPrice: 80_000 },
-  strawberry: { id: 'strawberry', name: 'Mứt dâu', emoji: '🍓', kind: 'flavor', color: '#e8506a', packSize: 20, packPrice: 100_000 },
-  peach: { id: 'peach', name: 'Đào miếng', emoji: '🍑', kind: 'flavor', color: '#f8a46a', packSize: 20, packPrice: 120_000 },
-  cheese_foam: { id: 'cheese_foam', name: 'Kem cheese', emoji: '🧀', kind: 'topping', color: '#fff4cf', packSize: 20, packPrice: 140_000 },
+  squid: ingredient('squid', 'Mực', '🦑', 'topping', '#f7ece0', 10_000),
+  shrimp: ingredient('shrimp', 'Tôm', '🦐', 'topping', '#ff8a4c', 15_000),
+  fishball: ingredient('fishball', 'Cá viên chiên', '🍢', 'topping', '#c98a45', 10_000),
+  beef: ingredient('beef', 'Bò', '🥩', 'topping', '#a8433a', 30_000),
+  sausage: ingredient('sausage', 'Xúc xích', '🌭', 'topping', '#e0584a', 10_000),
 
-  pearl_black: { id: 'pearl_black', name: 'Trân châu đen', emoji: '⚫', kind: 'topping', color: '#2a1a12', packSize: 40, packPrice: 80_000 },
-  pearl_white: { id: 'pearl_white', name: 'Trân châu trắng', emoji: '⚪', kind: 'topping', color: '#f4f1ea', packSize: 40, packPrice: 100_000 },
-  pearl_golden: { id: 'pearl_golden', name: 'Trân châu hoàng kim', emoji: '🟡', kind: 'topping', color: '#e6a821', packSize: 40, packPrice: 120_000 },
-  coconut_jelly: { id: 'coconut_jelly', name: 'Thạch dừa', emoji: '🥥', kind: 'topping', color: '#f2f7f2', packSize: 40, packPrice: 80_000 },
-  coffee_jelly: { id: 'coffee_jelly', name: 'Thạch cà phê', emoji: '☕', kind: 'topping', color: '#3d2416', packSize: 40, packPrice: 80_000 },
-  aloe: { id: 'aloe', name: 'Nha đam', emoji: '🌿', kind: 'topping', color: '#d8f0c8', packSize: 40, packPrice: 80_000 },
-  pudding: { id: 'pudding', name: 'Pudding trứng', emoji: '🥚', kind: 'topping', color: '#f6d36b', packSize: 20, packPrice: 100_000 },
-  flan: { id: 'flan', name: 'Bánh flan', emoji: '🍮', kind: 'topping', color: '#e9b24a', packSize: 20, packPrice: 120_000 },
+  kimchi: ingredient('kimchi', 'Kim chi', '🥬', 'veggie', '#e2452f', 5_000),
+  enoki: ingredient('enoki', 'Nấm kim châm', '🍄', 'veggie', '#f6f0dc', 10_000),
+  purple_cabbage: ingredient('purple_cabbage', 'Cải tím', '🟣', 'veggie', '#8e3fa0', 5_000),
+  cauliflower: ingredient('cauliflower', 'Súp lơ', '🥦', 'veggie', '#5fa83f', 5_000),
+
+  coca: ingredient('coca', 'Coca Cola', '🥤', 'drink', '#d81e1e', 10_000),
+  milk: ingredient('milk', 'Sữa', '🥛', 'drink', '#f4f6fb', 10_000),
 };
 
 export const INGREDIENT_IDS = Object.keys(INGREDIENTS) as IngredientId[];
 
+/** Giá vốn một phần. */
 export function unitCost(id: IngredientId): number {
   const ing = INGREDIENTS[id];
   return Math.round(ing.packPrice / ing.packSize);

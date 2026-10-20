@@ -1,19 +1,20 @@
-# Kiến trúc – Trà Sữa Tycoon
+# Kiến trúc – Mì Cay Tycoon
 
 ## 1. Lựa chọn công nghệ
 
-| Nhu cầu                                | Lựa chọn                                          | Lý do                                                                                                                          |
-| --------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Chơi trên iPhone không qua App Store | **PWA** (web app + manifest + service worker) | Safari cho "Thêm vào MH chính", chạy toàn màn hình, chơi offline, cập nhật chỉ cần deploy lại.                     |
-| UI 2D đơn giản, nhiều nút bấm     | **React 19 + DOM/CSS**                        | Game dạng bấm nút / thẻ đơn hợp với DOM hơn canvas: chữ tiếng Việt sắc nét, accessibility, layout responsive dễ. |
-| Ngôn ngữ                              | **TypeScript (strict)**                       | Dữ liệu game (công thức, giá) nhiều – có kiểu giúp tránh sai sót.                                                   |
-| Build                                   | **Vite 8** + **vite-plugin-pwa**        | Nhanh, sinh manifest + service worker Workbox tự động.                                                                       |
-| State                                   | **`useReducer`** với reducer thuần        | Đủ cho một màn hình; reducer thuần dễ test, dễ lưu/đọc. Không cần Redux/Zustand.                                   |
-| Test                                    | **Vitest**                                    | Chạy chung config Vite.                                                                                                        |
-| Hình ảnh                              | **Emoji + SVG + CSS**                         | Không cần asset, nhẹ, emoji trên iOS rất đẹp.                                                                            |
-| Âm thanh                               | **Web Audio** tổng hợp                      | Không cần file âm thanh, nhẹ.                                                                                               |
-| Lưu game                               | **localStorage**                              | Dữ liệu nhỏ (vài KB), đồng bộ, có sẵn mọi nơi.                                                                       |
-| Hosting                                 | **GitHub Pages** + GitHub Actions             | Miễn phí, HTTPS (bắt buộc cho service worker), deploy tự động khi push.                                                  |
+| Nhu cầu | Lựa chọn | Lý do |
+|---|---|---|
+| Chơi trên iPhone không qua App Store | **PWA** (web app + manifest + service worker) | Safari cho "Thêm vào MH chính", chạy toàn màn hình, chơi offline, cập nhật chỉ cần deploy lại. |
+| UI 2D đơn giản, nhiều nút bấm | **React 19 + DOM/CSS** | Game dạng bấm nút / thẻ đơn hợp với DOM hơn canvas: chữ tiếng Việt sắc nét, layout responsive dễ. |
+| Ngôn ngữ | **TypeScript (strict)** | Dữ liệu game (công thức, giá) nhiều – có kiểu giúp tránh sai sót. |
+| Build | **Vite 8** + **vite-plugin-pwa** | Nhanh, sinh manifest + service worker Workbox tự động. |
+| State | **`useReducer`** với reducer thuần | Đủ cho một màn chơi; reducer thuần dễ test, dễ lưu/đọc. Không cần Redux/Zustand. |
+| Test | **Vitest** | Chạy chung config Vite. |
+| Hình ảnh | **SVG + CSS + emoji** | Tô mì, hũ ớt, khách hàng, mặt tiền quán đều vẽ bằng SVG – không cần asset. |
+| Âm thanh | **Web Audio** tổng hợp | Không cần file âm thanh, nhẹ. |
+| Lưu game | **localStorage** (+ **Firestore** khi đăng nhập Google) | Dữ liệu nhỏ (vài KB). Đăng nhập thì lưu thêm lên mây để đổi máy không mất. |
+| Đăng nhập | **Firebase Authentication** (Google), tải động | Chỉ tải SDK khi đã cấu hình `firebaseConfig`; chế độ khách không tải gì thêm. |
+| Hosting | **GitHub Pages** + GitHub Actions | Miễn phí, HTTPS (bắt buộc cho service worker), deploy tự động khi push. |
 
 ## 2. Sơ đồ thư mục
 
@@ -22,73 +23,89 @@
 ├── docs/                      # tài liệu
 ├── index.html                 # meta iOS (apple-mobile-web-app-*, viewport-fit=cover)
 ├── vite.config.ts             # base path + cấu hình PWA + vitest
-├── public/                    # favicon.svg, icon PNG (sinh bằng scripts/gen-icons.mjs)
+├── public/                    # favicon.svg (tô mì cay), icon PNG (sinh bằng scripts/gen-icons.mjs)
 ├── scripts/gen-icons.mjs
 ├── .github/workflows/deploy.yml
 └── src/
     ├── main.tsx               # mount React, đăng ký service worker, import font
-    ├── App.tsx                # bố cục, modal, chuyển GameEvent → toast/âm thanh
+    ├── App.tsx                # điều hướng màn hình: tiêu đề → tạo quán → chơi; đăng nhập
+    ├── storage.ts             # cờ cài đặt nhỏ trong localStorage (âm thanh, đã xem hướng dẫn)
     ├── game/                  # logic thuần (xem mục 3)
+    ├── services/
+    │   ├── firebaseConfig.ts  # cấu hình Firebase (để trống apiKey = tắt đăng nhập)
+    │   └── cloud.ts           # đăng nhập Google, đọc/ghi save trên Firestore
     ├── hooks/
-    │   ├── useGame.ts         # useReducer + vòng lặp tick + autosave
+    │   ├── useGame.ts         # useReducer + vòng lặp tick + autosave (máy + mây)
     │   └── sound.ts           # hiệu ứng âm thanh Web Audio
     ├── components/
-    │   ├── Hud.tsx            # tiền, giờ, sao, thanh doanh thu, nút menu
-    │   ├── ShopScene.tsx      # khung cảnh quán + khách ở quầy
-    │   ├── Workstation.tsx    # ly, thẻ công thức, đá/đường, nút nguyên liệu, giao món
-    │   ├── CupView.tsx        # ly trà sữa SVG
-    │   ├── StockModal.tsx     # nhập hàng
-    │   ├── RecipeModal.tsx    # sổ công thức
-    │   ├── StaffModal.tsx     # thuê / cho nghỉ nhân viên
-    │   ├── DaySummaryModal.tsx
-    │   ├── SettingsModal.tsx  # âm thanh, hướng dẫn, chơi lại
-    │   ├── HelpContent.tsx    # nội dung hướng dẫn dùng chung
-    │   ├── Modal.tsx, Toasts.tsx
-    └── styles/global.css
+    │   ├── TitleScreen.tsx    # linh vật, đăng nhập / chơi ngay
+    │   ├── CreateShopScreen.tsx + Storefront.tsx   # đặt tên quán, chọn phong cách
+    │   ├── GameScreen.tsx     # màn chơi: HUD + cảnh quán + quầy nấu/dọn quán + modal; GameEvent → toast/âm thanh
+    │   ├── Hud.tsx            # tiền, sao, thanh doanh thu, nút menu
+    │   ├── ShopScene.tsx      # phòng ăn 10 bàn, quầy, cửa, khách đi lại, chỗ bẩn lúc dọn quán
+    │   ├── CustomerFigure.tsx # nhân vật khách SVG (11 kiểu) + biểu cảm (vui, cay đỏ mặt, khinh, buồn…)
+    │   ├── CleaningPanel.tsx  # tiến độ dọn quán + nút mở cửa (thay quầy nấu lúc 'prep')
+    │   ├── Workstation.tsx    # tô mì, thẻ đơn, hũ ớt, nút nguyên liệu, giao món
+    │   ├── BowlView.tsx       # tô mì cay SVG + chai nước cạnh tô
+    │   ├── StockModal.tsx, RecipeModal.tsx, StaffModal.tsx, DaySummaryModal.tsx, SettingsModal.tsx
+    │   └── HelpContent.tsx, Modal.tsx, Toasts.tsx
+    └── styles/global.css      # toàn bộ CSS; màu ở :root và theo [data-theme] (fire / ink / snow)
 ```
 
 ## 3. Lớp logic (`src/game/`)
 
 Không phụ thuộc React hay DOM → test được bằng Vitest thuần.
 
-- **`types.ts`** – `GameState`, `Customer`, `Order`, `Cup`, `GameEvent`…
-- **`data/`** – dữ liệu tĩnh (nguyên liệu, món, topping, nhân viên). Sửa cân bằng game chủ yếu ở đây.
-- **`constants.ts`** – hằng số: độ dài ngày, số khách tối đa, tỉ lệ tip, xác suất đá/đường…
-- **`orders.ts`** – `generateOrder`, `orderPrice`, `requiredRecipe`, `evaluateCup`, `computeTip`, `describeOrder`.
-- **`state.ts`** – `createInitialState(seed)` và `gameReducer(state, action)`.
+- **`types.ts`** – `GameState`, `Customer`, `Order`, `Bowl`, `Diner`, `PendingReview`, `DirtSpot`, `GameEvent`…
+- **`data/`** – dữ liệu tĩnh: `ingredients.ts` (giá vốn từng phần), `menu.ts` (món, nước; giá bán tự tính = vốn +
+  `BOWL_PROFIT`), `customers.ts` (kiểu khách), `reactions.ts` (câu nhận xét), `cleaning.ts` (loại chỗ bẩn),
+  `staff.ts`, `shop.ts` (phong cách quán, gợi ý tên).
+- **`constants.ts`** – hằng số cân bằng: độ dài ngày, nhịp khách, số bàn, thời gian ăn, tỉ lệ Grab/ăn tại chỗ,
+  cấp cay, tỉ lệ trả tiền khi lệch cay, danh tiếng…
+- **`orders.ts`** – `generateOrder`, `orderPrice`, `requiredRecipe`, `evaluateBowl` (→ `Reaction`), `payRate`,
+  `bowlCost`, `computeTip`, `describeOrder`, `serviceLabel`.
+- **`state.ts`** – `createInitialState(seed, shop)` và `gameReducer(state, action)`; `spawnInterval` (nhịp khách).
 - **`rng.ts`** – mulberry32 có seed. Seed nằm trong state nên reducer cho cùng kết quả với cùng input.
-- **`save.ts`** – `loadGame` / `saveGame` / `clearSave` (key `milk-tea-game/save`, kiểm tra `SAVE_VERSION`).
+- **`save.ts`** – `parseSave` / `serializeSave` / `loadGame` / `saveGame` / `clearSave` / `newerSave`
+  (key `milk-tea-game/save[/uid]` theo tên repo, kiểm tra `SAVE_VERSION`; save phiên bản cũ v1/v2 bị bỏ qua).
 
 ### GameState (rút gọn)
 
 ```ts
 {
-  money, totalRevenue, reputation,        // kinh tế
-  day, dayTimeMs, phase,                  // 'open' | 'closing' | 'summary'
+  shop: { name, theme },
+  money, totalRevenue, reputation,             // kinh tế
+  day, dayTimeMs, phase,                       // 'prep' | 'open' | 'closing' | 'summary'
+  dirt: DirtSpot[],                            // chỗ bẩn còn phải dọn (phase 'prep')
   inventory: Record<IngredientId, number>,
-  customers: Customer[], selectedCustomerId,
-  cup: { layers: IngredientId[], ice, sugar },
-  staff: { barista, waiter, stocker }, baristas: { customerId, progressMs }[],
+  customers: Customer[], selectedCustomerId,   // khách ở quầy (đơn gồm channel, dineIn, dishId, drinks, spice)
+  bowl: { steps: (IngredientId | 'chili')[] }, // tô đang nấu
+  tables: (Diner | null)[],                    // 10 bàn
+  tableQueue: Diner[],                         // khách bưng tô chờ bàn
+  reviews: PendingReview[],                    // khách mang về / Grab sắp gửi đánh giá
+  staff: { cook, waiter, stocker }, cooks: { customerId, progressMs }[],
   dayStats, lastSummary,
-  events: GameEvent[], nextEventId,       // hàng đợi thông báo cho UI
+  events: GameEvent[], nextEventId,            // hàng đợi thông báo cho UI
   rngSeed, nextId, nextCustomerInMs, ...
 }
 ```
 
 ### Actions
 
-| Action                       | Tác dụng                                                                                                           |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `TICK { dt }`              | Chạy thời gian: giờ trong ngày, khách tới, giảm kiên nhẫn, nhân viên làm việc, đóng cửa, tổng kết. |
-| `SELECT_CUSTOMER { id }`   | Chọn đơn để pha.                                                                                                |
-| `ADD_INGREDIENT { id }`    | Trừ 1 phần trong kho, thêm 1 lớp vào ly.                                                                        |
-| `UNDO` / `DISCARD`       | Bỏ lớp cuối (trả kho) / đổ cả ly (mất).                                                                      |
-| `SET_ICE` / `SET_SUGAR`  | Chọn mức đá / đường cho ly.                                                                                   |
-| `SERVE`                    | Chấm ly với đơn đang chọn, trả tiền/tip/danh tiếng.                                                         |
-| `BUY_PACK { id, packs }`   | Nhập hàng.                                                                                                         |
-| `HIRE` / `FIRE { role }` | Thuê / cho nghỉ nhân viên.                                                                                       |
-| `NEXT_DAY`                 | Sang ngày mới từ màn tổng kết.                                                                                 |
-| `RESET { seed }`           | Chơi lại từ đầu.                                                                                                |
+| Action | Tác dụng |
+|---|---|
+| `TICK { dt }` | Chạy thời gian (bỏ qua khi `prep`/`summary`): giờ trong ngày, khách tới theo nhịp, giảm kiên nhẫn, đầu bếp, nhân viên kho, khách ăn ở bàn, đánh giá mang về, đóng cửa, tổng kết. |
+| `CLEAN { id }` | Chạm 1 lần vào chỗ bẩn; hết "máu" thì biến mất. Sạch hết → event `clean`. |
+| `OPEN_SHOP` | Mở cửa khi đã dọn sạch (`prep` → `open`). |
+| `SELECT_CUSTOMER { id }` | Chọn đơn để nấu. |
+| `ADD_INGREDIENT { id }` | Trừ 1 phần trong kho, bỏ vào tô (nước thì đặt lên khay). |
+| `ADD_CHILI` | Thêm 1 shot ớt (tối đa 7). |
+| `UNDO` / `DISCARD` | Bỏ thao tác cuối (trả kho) / đổ cả tô (mất nguyên liệu, nước được cất lại). |
+| `SERVE` | Chấm tô: sai món → bỏ tô, trừ tiền giá vốn; đúng món → `deliver()` (vào bàn / chờ bàn / mang về). |
+| `BUY_PACK { id, packs }` | Nhập hàng. |
+| `HIRE` / `FIRE { role }` | Thuê / cho nghỉ nhân viên. |
+| `NEXT_DAY` | Sang ngày mới từ màn tổng kết → `prep` với chỗ bẩn mới. |
+| `RESET { seed, shop }` | Chơi lại từ đầu. |
 
 Reducer sao chép nông các phần có thể đổi (`draft()`), mutate bản sao rồi trả về – state cũ không bao giờ bị sửa
 (có test kiểm tra).
@@ -98,19 +115,28 @@ Reducer sao chép nông các phần có thể đổi (`draft()`), mutate bản s
 ```
 useGame(paused)
  ├─ setInterval 100ms ──► dispatch(TICK, dt = min(250, now − last))   (bỏ qua khi tab ẩn / paused)
- ├─ setInterval 2s ─────► saveGame(state)
- └─ visibilitychange / pagehide ─► saveGame(state)
+ ├─ setInterval 2s ─────► saveGame(state)  (+ lên Firestore mỗi 20s nếu đã đăng nhập)
+ └─ visibilitychange / pagehide ─► lưu ngay
 ```
 
 - `paused` = người chơi bấm ⏸️ **hoặc** đang mở modal **hoặc** đang xem hướng dẫn.
 - Giới hạn `dt` 250ms để khi iOS treo tab rồi mở lại, game không "nhảy" cả phút.
 
-## 5. Thông báo (GameEvent)
+## 5. Thông báo (GameEvent) và hoạt cảnh
 
-Reducer không thể gọi UI, nên mọi thông báo được đẩy vào `state.events` (giữ tối đa 30 event gần nhất, mỗi event
-có `id` tăng dần). `App.tsx` nhớ `id` cuối đã xử lý; với mỗi event mới → tạo toast (tự ẩn sau 3,2s, tối đa 3) và
-phát âm thanh tương ứng (`order`, `coin`, `wrong`, `left`, `unlock`). Âm "pop" khi bấm nguyên liệu phát trực tiếp
-trong `dispatch` bọc ở `App.tsx`.
+Reducer không thể gọi UI, nên mọi thông báo được đẩy vào `state.events` (giữ tối đa 30 event gần nhất, `id` tăng
+dần). `GameScreen` nhớ `id` cuối đã xử lý; mỗi event mới → toast (tự ẩn sau 2,8s, tối đa 2) + âm thanh.
+
+`ShopScene` dùng event để dựng hoạt cảnh mà không cần thêm state trong logic:
+
+| Event | Hoạt cảnh |
+|---|---|
+| `served` (mang về / Grab) | khách xách túi đi ra cửa, tiền bay lên |
+| `served` (ăn tại chỗ) | khách xuất hiện ngồi ở bàn (đọc từ `state.tables`) hoặc đứng chờ bàn (`state.tableQueue`) |
+| `finished` | khách tại bàn đổi biểu cảm theo `reaction` + bong bóng nhận xét + tiền trả, rồi rời bàn |
+| `review` | chỉ toast 📱 (khách ăn ở nhà) |
+| `wrong` | khách ở quầy mặt buồn + bong bóng chê, vẫn đứng chờ |
+| `left` | khách giận dữ đi ra cửa |
 
 ## 6. PWA & iPhone
 
@@ -119,13 +145,15 @@ trong `dispatch` bọc ở `App.tsx`.
 - CSS dùng `100dvh`, `env(safe-area-inset-top/bottom)`, `touch-action: manipulation`, `overscroll-behavior: none`,
   tắt chọn chữ trong vùng chơi.
 - Service worker (Workbox) precache toàn bộ JS/CSS/font/icon → chơi offline sau lần mở đầu tiên.
-  `registerType: 'autoUpdate'`: có bản mới thì service worker mới kích hoạt và trang tự tải lại. Vì iOS thường chỉ
-  đánh thức PWA từ nền (không tải lại trang), `main.tsx` gọi `registration.update()` mỗi khi app hiện lại.
+  `registerType: 'autoUpdate'`; `main.tsx` gọi `registration.update()` mỗi khi app hiện lại.
 - Âm thanh: `AudioContext` được tạo/resume ở `pointerdown` đầu tiên (chính sách autoplay của iOS).
 
 ## 7. Kiểm thử
 
-- `src/game/orders.test.ts` – giá, công thức, chấm ly, sinh đơn hợp lệ, tip, mô tả đơn.
-- `src/game/state.test.ts` – khởi tạo, tính bất biến, khách tới, giao đúng/sai, hoàn tác, nhập hàng, khách bỏ về,
-  kết thúc ngày + trừ lương, khóa/mở thuê nhân viên, nhân viên pha chế, thông báo mở khóa món.
+- `src/game/orders.test.ts` – giá món = vốn + 20k, giá nước, chấm tô theo độ lệch cay, sai món (thiếu/thừa, quên
+  nước, cải tím), sinh đơn hợp lệ (Grab luôn mang về, cấp cay 0–7), tip, mô tả đơn.
+- `src/game/state.test.ts` – dọn quán trước khi mở cửa, nhịp khách (giới hạn, chậm lại khi dồn, không để ế, mô
+  phỏng cả ngày), mang về + đánh giá + hoàn tiền, ăn tại chỗ + trả tiền khi ăn xong, hết bàn phải chờ, đơn Grab,
+  sai món trừ tiền, hũ ớt, hoàn tác/đổ bỏ, nhập hàng, khách bỏ về, kết thúc ngày chờ khách ăn xong, nhân viên.
+- `src/game/save.test.ts` – ghi/đọc save, bỏ qua save phiên bản cũ, chọn bản mới hơn giữa máy và mây.
 - UI kiểm tra thủ công ở khung 390×844 (iPhone 14/15) – xem checklist trong `docs/DEPLOYMENT.md`.

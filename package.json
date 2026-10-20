@@ -2,7 +2,7 @@
   "name": "milk-tea-game",
   "private": true,
   "version": "1.0.0",
-  "description": "Trà Sữa Tycoon – game giả lập quán trà sữa 2D, chơi trên trình duyệt / iPhone (PWA)",
+  "description": "Mì Cay Tycoon – game giả lập quán mì cay 2D, chơi trên trình duyệt / iPhone (PWA)",
   "type": "module",
   "scripts": {
     "dev": "vite --host",
@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@fontsource/baloo-2": "^5.3.0",
+    "firebase": "^12.19.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },

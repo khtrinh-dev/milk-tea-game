@@ -1,34 +1,76 @@
 import { SAVE_VERSION } from './constants';
 import type { GameState } from './types';
 
-const KEY = 'milk-tea-game/save';
+const GUEST_KEY = 'milk-tea-game/save';
 
-/** Đọc save từ localStorage. Trả về null nếu không có, hỏng hoặc khác phiên bản. */
-export function loadGame(): GameState | null {
+/** Một bản lưu: state + thời điểm lưu (ms, do UI cung cấp) để so bản trên máy với bản trên mây. */
+export interface SaveFile {
+  state: GameState;
+  savedAt: number;
+}
+
+/** Mỗi tài khoản một ô lưu riêng trên máy; chế độ khách dùng key cũ để giữ save từ bản trước. */
+export function saveKey(uid: string | null): string {
+  return uid ? `${GUEST_KEY}/${uid}` : GUEST_KEY;
+}
+
+/**
+ * Đưa save phiên bản cũ lên phiên bản hiện tại. Trả về null nếu không chuyển được.
+ * v1, v2 là cấu trúc save cũ không còn tương thích – không chuyển, người chơi mở quán mới.
+ */
+function migrate(data: GameState & { version: number }): GameState | null {
+  if (data.version === SAVE_VERSION) return data;
+  return null;
+}
+
+/** Đọc chuỗi JSON (từ localStorage hoặc từ mây) thành SaveFile. Hỏng → null. */
+export function parseSave(raw: string | null | undefined): SaveFile | null {
+  if (!raw) return null;
   try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return null;
-    const data = JSON.parse(raw) as GameState;
-    if (data.version !== SAVE_VERSION) return null;
-    return { ...data, events: [] };
+    const data = JSON.parse(raw) as Partial<SaveFile> & { version?: number };
+    // Bản v1 lưu thẳng GameState, chưa có wrapper.
+    const file: SaveFile = data.state ? (data as SaveFile) : { state: data as unknown as GameState, savedAt: 0 };
+    const state = migrate(file.state);
+    if (!state) return null;
+    return { state: { ...state, events: [] }, savedAt: file.savedAt ?? 0 };
   } catch {
     return null;
   }
 }
 
-export function saveGame(state: GameState): void {
+export function serializeSave(state: GameState, savedAt: number): string {
+  // Không lưu events: chúng chỉ để UI hiện toast/âm thanh trong phiên hiện tại.
+  return JSON.stringify({ state: { ...state, events: [] }, savedAt } satisfies SaveFile);
+}
+
+/** Đọc save trên máy. Không có, hỏng hoặc không chuyển được phiên bản → null. */
+export function loadGame(uid: string | null = null): SaveFile | null {
   try {
-    // Không lưu events: chúng chỉ để UI hiện toast/âm thanh trong phiên hiện tại.
-    localStorage.setItem(KEY, JSON.stringify({ ...state, events: [] }));
+    return parseSave(localStorage.getItem(saveKey(uid)));
+  } catch {
+    return null;
+  }
+}
+
+export function saveGame(state: GameState, savedAt: number, uid: string | null = null): void {
+  try {
+    localStorage.setItem(saveKey(uid), serializeSave(state, savedAt));
   } catch {
     // Safari private mode hoặc hết dung lượng – bỏ qua, game vẫn chơi được.
   }
 }
 
-export function clearSave(): void {
+export function clearSave(uid: string | null = null): void {
   try {
-    localStorage.removeItem(KEY);
+    localStorage.removeItem(saveKey(uid));
   } catch {
     // bỏ qua
   }
+}
+
+/** Chọn bản mới hơn giữa save trên máy và trên mây. */
+export function newerSave(a: SaveFile | null, b: SaveFile | null): SaveFile | null {
+  if (!a) return b;
+  if (!b) return a;
+  return b.savedAt > a.savedAt ? b : a;
 }

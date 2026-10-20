@@ -1,42 +1,53 @@
 import type { Dispatch } from 'react';
-import { ICE_LABELS, ICE_LEVELS, SUGAR_LABELS, SUGAR_LEVELS } from '../game/constants';
+import { MAX_SPICE } from '../game/constants';
 import { INGREDIENTS } from '../game/data/ingredients';
-import { DRINK_BY_ID, unlockedIngredients } from '../game/data/menu';
-import { formatVND } from '../game/money';
-import { cupCounts, requiredRecipe } from '../game/orders';
+import { DISH_BY_ID, stationIngredients } from '../game/data/menu';
+import { formatShortVND, formatVND } from '../game/money';
+import { bowlCounts, bowlItems, chiliShots, customerTitle, requiredRecipe, serviceLabel, spiceLabel } from '../game/orders';
 import type { GameAction } from '../game/state';
-import type { Customer, GameState, IngredientId } from '../game/types';
-import { CupView } from './CupView';
+import type { Customer, GameState, IngredientId, IngredientKind } from '../game/types';
+import { BowlView } from './BowlView';
 
 interface Props {
   state: GameState;
   dispatch: Dispatch<GameAction>;
 }
 
+/** Thứ tự nút ở quầy: mì → đồ nhúng → rau → nước uống. */
+const KIND_ORDER: IngredientKind[] = ['noodle', 'topping', 'veggie', 'drink'];
+
 function OrderCard({ customer, state }: { customer: Customer | undefined; state: GameState }) {
   if (!customer) {
     return (
       <div className="order-card empty">
         <p>Chưa chọn đơn nào.</p>
-        <p className="hint">Khi khách tới, chạm vào khách để xem công thức.</p>
+        <p className="hint">Khi khách tới, chạm vào khách để xem món.</p>
       </div>
     );
   }
   const { order } = customer;
   const need = requiredRecipe(order);
-  const have = cupCounts(state.cup);
+  const have = bowlCounts(state.bowl);
   const extras = (Object.keys(have) as IngredientId[]).filter((id) => !(id in need));
-  const iceOk = state.cup.ice === order.ice;
-  const sugarOk = state.cup.sugar === order.sugar;
+  const shots = chiliShots(state.bowl);
 
   return (
     <div className="order-card">
       <div className="order-title">
-        <span>{customer.avatar} {customer.name}</span>
+        <span className="order-who">{customerTitle(customer)}</span>
         <span className="price">{formatVND(order.price)}</span>
       </div>
-      <div className="order-drink">{DRINK_BY_ID[order.drinkId].name}</div>
+      <div className="order-dish">
+        {DISH_BY_ID[order.dishId].name}
+        <span className={`service-tag ${order.channel === 'grab' ? 'grab' : order.dineIn ? 'dine' : 'takeaway'}`}>
+          {order.channel === 'grab' ? '🛵' : order.dineIn ? '🪑' : '🛍️'} {serviceLabel(order)}
+        </span>
+      </div>
       <ul className="checklist">
+        <li className={`spice-line ${shots === order.spice ? 'ok' : shots > order.spice ? 'bad' : ''}`}>
+          <span>🌶️ {spiceLabel(order.spice)}</span>
+          <span className="count">{shots}/{order.spice} shot</span>
+        </li>
         {(Object.entries(need) as [IngredientId, number][]).map(([id, n]) => {
           const h = have[id] ?? 0;
           return (
@@ -52,25 +63,51 @@ function OrderCard({ customer, state }: { customer: Customer | undefined; state:
             <span className="count">thừa {have[id]}</span>
           </li>
         ))}
-        <li className={iceOk ? 'ok' : order.ice !== 'normal' ? 'attention' : ''}>
-          <span>🧊 {ICE_LABELS[order.ice]}</span>
-          <span className="count">{iceOk ? '✓' : '✗'}</span>
-        </li>
-        <li className={sugarOk ? 'ok' : order.sugar !== 'normal' ? 'attention' : ''}>
-          <span>🍬 {SUGAR_LABELS[order.sugar]}</span>
-          <span className="count">{sugarOk ? '✓' : '✗'}</span>
-        </li>
       </ul>
     </div>
+  );
+}
+
+/** Hũ ớt: mỗi lần chạm thêm 1 shot ớt = tăng 1 cấp cay. */
+function ChiliJar({ shots, target, onAdd }: { shots: number; target: number | null; onAdd: () => void }) {
+  return (
+    <button className="chili-jar" onClick={onAdd} disabled={shots >= MAX_SPICE} aria-label={`Hũ ớt: thêm 1 shot (đang ${shots}/${MAX_SPICE})`}>
+      <svg viewBox="0 0 60 64" width="54" height="58" aria-hidden="true">
+        <rect x="9" y="4" width="42" height="11" rx="4" fill="#1d1d1d" stroke="#000" strokeWidth="2.5" />
+        <path d="M8 16 h44 v38 a7 7 0 0 1 -7 7 h-30 a7 7 0 0 1 -7 -7 z" fill="#fff6f2" stroke="#1d1d1d" strokeWidth="3" />
+        <path d="M9.5 30 q10 -4 20 0 t21 0 v24 a6 6 0 0 1 -6 6 h-29 a6 6 0 0 1 -6 -6 z" fill="#d4180c" />
+        {[16, 25, 34, 43, 20, 30, 39].map((cx, i) => (
+          <circle key={i} cx={cx} cy={i < 4 ? 50 : 41} r="1.8" fill="#ffb199" />
+        ))}
+        <rect x="13" y="20" width="4" height="8" rx="2" fill="#fff" opacity="0.8" />
+        <rect x="14" y="33" width="32" height="12" rx="3" fill="#fff" stroke="#1d1d1d" strokeWidth="1.5" />
+        <text x="30" y="42.5" textAnchor="middle" className="jar-label">HŨ ỚT</text>
+      </svg>
+      <span className="chili-info">
+        <span className="chili-meter" aria-hidden="true">
+          {Array.from({ length: MAX_SPICE }, (_, i) => (
+            <span key={i} className={`chili-dot ${i < shots ? 'on' : ''} ${target !== null && i === target - 1 ? 'target' : ''}`}>
+              🌶️
+            </span>
+          ))}
+        </span>
+        <span className="chili-text">
+          {shots === 0 ? 'Chạm để thêm ớt' : `Cấp ${shots}/${MAX_SPICE}`}
+          {target !== null && <b> · khách gọi cấp {target}</b>}
+        </span>
+      </span>
+    </button>
   );
 }
 
 export function Workstation({ state, dispatch }: Props) {
   const customer = state.customers.find((c) => c.id === state.selectedCustomerId);
   const need = customer ? requiredRecipe(customer.order) : {};
-  const ingredients = unlockedIngredients(state.totalRevenue);
-  const bases = ingredients.filter((id) => INGREDIENTS[id].kind !== 'topping');
-  const toppings = ingredients.filter((id) => INGREDIENTS[id].kind === 'topping');
+  const ingredients = stationIngredients(state.totalRevenue).sort(
+    (a, b) => KIND_ORDER.indexOf(INGREDIENTS[a].kind) - KIND_ORDER.indexOf(INGREDIENTS[b].kind),
+  );
+  const empty = state.bowl.steps.length === 0;
+  const hasFood = bowlItems(state.bowl).some((id) => INGREDIENTS[id].kind !== 'drink');
 
   const renderButton = (id: IngredientId) => {
     const ing = INGREDIENTS[id];
@@ -79,13 +116,13 @@ export function Workstation({ state, dispatch }: Props) {
     return (
       <button
         key={id}
-        className={`ing-btn ${id in need ? 'needed' : ''} ${out ? 'out' : ''}`}
+        className={`ing-btn kind-${ing.kind} ${id in need ? 'needed' : ''} ${out ? 'out' : ''}`}
         onClick={() => dispatch(out ? { type: 'BUY_PACK', id } : { type: 'ADD_INGREDIENT', id })}
         aria-label={out ? `Hết ${ing.name}, chạm để nhập 1 gói` : `Thêm ${ing.name}`}
       >
         <span className="ing-emoji">{ing.emoji}</span>
         <span className="ing-name">{ing.name}</span>
-        <span className="ing-stock">{out ? `Hết · nhập ${formatVND(ing.packPrice)}` : stock}</span>
+        <span className="ing-stock">{out ? `Nhập ${formatShortVND(ing.packPrice)}` : stock}</span>
       </button>
     );
   };
@@ -93,48 +130,24 @@ export function Workstation({ state, dispatch }: Props) {
   return (
     <section className="station">
       <div className="station-top">
-        <div className="cup-wrap">
-          <CupView cup={state.cup} />
-          <div className="cup-stock">🥤 còn {state.inventory.cup} ly</div>
-        </div>
+        <BowlView bowl={state.bowl} size={118} />
         <OrderCard customer={customer} state={state} />
       </div>
 
-      <div className="options">
-        <div className="option-row" role="radiogroup" aria-label="Đá">
-          <span className="option-label">🧊</span>
-          {ICE_LEVELS.map((lv) => (
-            <button key={lv} role="radio" aria-checked={state.cup.ice === lv} className={`chip ${state.cup.ice === lv ? 'active' : ''}`} onClick={() => dispatch({ type: 'SET_ICE', ice: lv })}>
-              {ICE_LABELS[lv].replace('Đá bình thường', 'Bình thường')}
-            </button>
-          ))}
-        </div>
-        <div className="option-row" role="radiogroup" aria-label="Đường">
-          <span className="option-label">🍬</span>
-          {SUGAR_LEVELS.map((lv) => (
-            <button key={lv} role="radio" aria-checked={state.cup.sugar === lv} className={`chip ${state.cup.sugar === lv ? 'active' : ''}`} onClick={() => dispatch({ type: 'SET_SUGAR', sugar: lv })}>
-              {SUGAR_LABELS[lv].replace('Ngọt bình thường', 'Bình thường')}
-            </button>
-          ))}
-        </div>
-      </div>
-
       <div className="ingredients">
-        <h3>Trà · Sữa · Hương vị</h3>
-        <div className="ing-grid">{bases.map(renderButton)}</div>
-        <h3>Topping</h3>
-        <div className="ing-grid">{toppings.map(renderButton)}</div>
+        <ChiliJar shots={chiliShots(state.bowl)} target={customer ? customer.order.spice : null} onAdd={() => dispatch({ type: 'ADD_CHILI' })} />
+        <div className="ing-grid">{ingredients.map(renderButton)}</div>
       </div>
 
       <div className="actions">
-        <button className="btn secondary" onClick={() => dispatch({ type: 'UNDO' })} disabled={state.cup.layers.length === 0}>
+        <button className="btn secondary" onClick={() => dispatch({ type: 'UNDO' })} disabled={empty}>
           ↶ Hoàn tác
         </button>
-        <button className="btn secondary" onClick={() => dispatch({ type: 'DISCARD' })} disabled={state.cup.layers.length === 0}>
+        <button className="btn secondary" onClick={() => dispatch({ type: 'DISCARD' })} disabled={empty}>
           🗑️ Đổ bỏ
         </button>
-        <button className="btn primary" onClick={() => dispatch({ type: 'SERVE' })} disabled={!customer || state.cup.layers.length === 0}>
-          ✅ Giao món
+        <button className="btn primary" onClick={() => dispatch({ type: 'SERVE' })} disabled={!customer || !hasFood}>
+          🍜 Giao món
         </button>
       </div>
     </section>

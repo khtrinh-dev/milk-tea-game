@@ -1,91 +1,152 @@
 import {
-  ICE_LABELS,
-  ICE_WEIGHTS,
+  DINE_IN_CHANCE,
+  DRINK_ORDER_WEIGHTS,
+  GRAB_ORDER_CHANCE,
   MAX_TIP_RATE,
-  SUGAR_LABELS,
-  SUGAR_WEIGHTS,
-  TOPPING_COUNT_WEIGHTS,
+  SPICE_BIG_MISS,
+  SPICE_BIG_MISS_PAY_RATE,
+  SPICE_SMALL_MISS_PAY_RATE,
+  SPICE_WEIGHTS,
 } from './constants';
-import { INGREDIENTS } from './data/ingredients';
-import { DRINK_BY_ID, TOPPING_BY_ID, unlockedDrinks, unlockedToppings } from './data/menu';
+import { ARCHETYPES, HAIR_COLORS, SKIN_TONES } from './data/customers';
+import { INGREDIENTS, unitCost } from './data/ingredients';
+import { DISH_BY_ID, DRINK_BY_ID, unlockedDishes, unlockedDrinks } from './data/menu';
 import type { Rng } from './rng';
-import type { Cup, IngredientId, Order, Recipe } from './types';
+import type { ArchetypeId, Bowl, CustomerLook, IngredientId, Order, OrderChannel, Reaction, Recipe } from './types';
 
-const NAMES = [
-  'Lan', 'Minh', 'Hùng', 'Thảo', 'Vy', 'Nam', 'Linh', 'Tuấn', 'Trang', 'Khoa',
-  'Mai', 'Phúc', 'Ngọc', 'Bảo', 'Hà', 'Quân', 'Yến', 'Đạt', 'My', 'Long',
-];
-const AVATARS = ['👩', '👨', '👧', '👦', '👩‍🦰', '👨‍🦱', '👱‍♀️', '🧑', '👵', '👴', '👩‍🎓', '🧑‍💻', '👮‍♀️', '🧕'];
+/** Khách vào quán: mọi kiểu khách trừ tài xế Grab (anh Grab chỉ tới lấy đơn đặt qua app). */
+const WALK_IN_WEIGHTS = Object.fromEntries(
+  Object.values(ARCHETYPES)
+    .filter((a) => a.id !== 'grab')
+    .map((a) => [a.id, a.weight]),
+) as Record<ArchetypeId, number>;
 
-export function randomCustomerLook(rng: Rng): { name: string; avatar: string } {
-  return { name: rng.pick(NAMES), avatar: rng.pick(AVATARS) };
+const SPICE_LEVEL_WEIGHTS = Object.fromEntries(SPICE_WEIGHTS.map((w, level) => [String(level), w]));
+
+export function randomCustomerLook(rng: Rng, channel: OrderChannel = 'walk-in'): { name: string; look: CustomerLook } {
+  const archetype = ARCHETYPES[channel === 'grab' ? 'grab' : rng.weighted(WALK_IN_WEIGHTS)];
+  return {
+    name: rng.pick(archetype.names),
+    look: { archetype: archetype.id, skin: rng.int(0, SKIN_TONES - 1), hair: rng.int(0, HAIR_COLORS - 1) },
+  };
+}
+
+/** "Anh Grab Tuấn", "Sinh viên UEH Linh"… (đơn Grab: chính là tài xế tới lấy đơn) */
+export function customerTitle(customer: { name: string; look: CustomerLook }): string {
+  return `${ARCHETYPES[customer.look.archetype].title} ${customer.name}`;
 }
 
 export function generateOrder(rng: Rng, totalRevenue: number): Order {
-  const drink = rng.pick(unlockedDrinks(totalRevenue));
-  const available = unlockedToppings(totalRevenue).filter((t) => !(t.id in drink.recipe));
-  const countKey = rng.weighted({ '0': TOPPING_COUNT_WEIGHTS[0], '1': TOPPING_COUNT_WEIGHTS[1], '2': TOPPING_COUNT_WEIGHTS[2] });
-  const count = Math.min(Number(countKey), available.length);
-
-  const toppings: IngredientId[] = [];
-  const pool = [...available];
-  for (let i = 0; i < count; i++) {
-    const idx = rng.int(0, pool.length - 1);
-    toppings.push(pool[idx].id);
-    pool.splice(idx, 1);
-  }
-
+  const channel: OrderChannel = rng.next() < GRAB_ORDER_CHANCE ? 'grab' : 'walk-in';
+  const dineIn = channel === 'walk-in' && rng.next() < DINE_IN_CHANCE;
+  const dish = rng.pick(unlockedDishes(totalRevenue));
+  const available = new Set(unlockedDrinks(totalRevenue).map((d) => d.id as string));
+  const weights = Object.fromEntries(
+    Object.entries(DRINK_ORDER_WEIGHTS).filter(([id]) => id === 'none' || available.has(id)),
+  );
+  const drink = rng.weighted(weights);
   const order: Omit<Order, 'price'> = {
-    drinkId: drink.id,
-    toppings,
-    ice: rng.weighted(ICE_WEIGHTS),
-    sugar: rng.weighted(SUGAR_WEIGHTS),
+    channel,
+    dineIn,
+    dishId: dish.id,
+    drinks: drink === 'none' ? [] : [drink as IngredientId],
+    spice: Number(rng.weighted(SPICE_LEVEL_WEIGHTS)),
   };
   return { ...order, price: orderPrice(order) };
 }
 
-export function orderPrice(order: Pick<Order, 'drinkId' | 'toppings'>): number {
-  const drink = DRINK_BY_ID[order.drinkId];
-  return order.toppings.reduce((sum, t) => sum + (TOPPING_BY_ID[t]?.price ?? 0), drink.price);
+export function orderPrice(order: Pick<Order, 'dishId' | 'drinks'>): number {
+  const dish = DISH_BY_ID[order.dishId];
+  return order.drinks.reduce((sum, d) => sum + (DRINK_BY_ID[d]?.price ?? 0), dish.price);
 }
 
-/** Công thức đầy đủ của đơn = công thức món + topping khách gọi thêm. */
+/** Những thứ phải có trên khay = công thức món + nước uống khách gọi kèm (không tính ớt). */
 export function requiredRecipe(order: Order): Recipe {
-  const recipe: Recipe = { ...DRINK_BY_ID[order.drinkId].recipe };
-  for (const t of order.toppings) recipe[t] = (recipe[t] ?? 0) + 1;
+  const recipe: Recipe = { ...DISH_BY_ID[order.dishId].recipe };
+  for (const d of order.drinks) recipe[d] = (recipe[d] ?? 0) + 1;
   return recipe;
 }
 
-export function cupCounts(cup: Cup): Recipe {
+/** Nguyên liệu và nước đã bỏ lên khay theo thứ tự (bỏ qua shot ớt). */
+export function bowlItems(bowl: Bowl): IngredientId[] {
+  return bowl.steps.filter((s): s is IngredientId => s !== 'chili');
+}
+
+/** Phần bỏ vào tô (không tính nước uống để bên cạnh). */
+export function bowlContents(bowl: Bowl): IngredientId[] {
+  return bowlItems(bowl).filter((id) => INGREDIENTS[id].kind !== 'drink');
+}
+
+export function bowlDrinks(bowl: Bowl): IngredientId[] {
+  return bowlItems(bowl).filter((id) => INGREDIENTS[id].kind === 'drink');
+}
+
+/** Số shot ớt đã cho vào tô = cấp độ cay của tô. */
+export function chiliShots(bowl: Bowl): number {
+  return bowl.steps.filter((s) => s === 'chili').length;
+}
+
+export function bowlCounts(bowl: Bowl): Recipe {
   const counts: Recipe = {};
-  for (const id of cup.layers) counts[id] = (counts[id] ?? 0) + 1;
+  for (const id of bowlItems(bowl)) counts[id] = (counts[id] ?? 0) + 1;
   return counts;
 }
 
-export type CupResult = 'perfect' | 'wrong-option' | 'wrong-drink';
+/** Giá vốn nguyên liệu đang có trên khay – số tiền bị trừ khi phải bỏ tô. */
+export function bowlCost(bowl: Bowl): number {
+  return bowlItems(bowl).reduce((sum, id) => sum + unitCost(id), 0);
+}
 
-export function evaluateCup(cup: Cup, order: Order): CupResult {
+/** Chấm tô: sai nguyên liệu/nước → 'bad'; đúng món thì cảm nhận theo độ lệch cay. */
+export function evaluateBowl(bowl: Bowl, order: Order): Reaction {
   const need = requiredRecipe(order);
-  const have = cupCounts(cup);
+  const have = bowlCounts(bowl);
   const ids = new Set([...Object.keys(need), ...Object.keys(have)] as IngredientId[]);
   for (const id of ids) {
-    if ((need[id] ?? 0) !== (have[id] ?? 0)) return 'wrong-drink';
+    if ((need[id] ?? 0) !== (have[id] ?? 0)) return 'bad';
   }
-  if (cup.ice !== order.ice || cup.sugar !== order.sugar) return 'wrong-option';
-  return 'perfect';
+  const diff = chiliShots(bowl) - order.spice;
+  if (diff === 0) return 'delicious';
+  if (diff > 0) return diff >= SPICE_BIG_MISS ? 'very-spicy' : 'spicy';
+  return -diff >= SPICE_BIG_MISS ? 'not-spicy' : 'mild';
 }
 
-/** Tip tỉ lệ với thời gian chờ còn lại và danh tiếng, làm tròn tới 1.000₫. */
-export function computeTip(price: number, patienceLeftRatio: number, reputation: number): number {
+/** Tỉ lệ giá khách chịu trả theo cảm nhận (sai món thì không trả). */
+export function payRate(reaction: Reaction): number {
+  switch (reaction) {
+    case 'delicious':
+      return 1;
+    case 'spicy':
+    case 'mild':
+      return SPICE_SMALL_MISS_PAY_RATE;
+    case 'very-spicy':
+    case 'not-spicy':
+      return SPICE_BIG_MISS_PAY_RATE;
+    case 'bad':
+      return 0;
+  }
+}
+
+/** Tip tỉ lệ với thời gian chờ còn lại, danh tiếng và độ hào phóng của khách, làm tròn tới 1.000₫. */
+export function computeTip(price: number, patienceLeftRatio: number, reputation: number, tipMul = 1): number {
   const ratio = Math.max(0, Math.min(1, patienceLeftRatio));
   const repFactor = 0.5 + reputation / 100;
-  return Math.round((price * MAX_TIP_RATE * ratio * repFactor) / 1000) * 1000;
+  return Math.round((price * MAX_TIP_RATE * ratio * repFactor * tipMul) / 1000) * 1000;
 }
 
-/** Mô tả ngắn để hiện thông báo: "Trà sữa matcha + Trân châu trắng (ít đá, ít ngọt)". */
+export function spiceLabel(level: number): string {
+  return level === 0 ? 'Không cay' : `Cay cấp ${level}`;
+}
+
+export function serviceLabel(order: Pick<Order, 'channel' | 'dineIn'>): string {
+  if (order.channel === 'grab') return 'Grab';
+  return order.dineIn ? 'Ăn tại chỗ' : 'Mang về';
+}
+
+/** Mô tả ngắn để hiện thông báo: "Mì cay bò cấp 3 + Coca Cola (mang về)". */
 export function describeOrder(order: Order): string {
-  const drink = DRINK_BY_ID[order.drinkId];
-  const tops = order.toppings.map((t) => INGREDIENTS[t].name).join(', ');
-  const opts = [ICE_LABELS[order.ice], SUGAR_LABELS[order.sugar]].join(', ').toLowerCase();
-  return `${drink.name}${tops ? ` + ${tops}` : ''} (${opts})`;
+  const dish = DISH_BY_ID[order.dishId];
+  const drinks = order.drinks.map((d) => INGREDIENTS[d].name).join(', ');
+  const spice = order.spice === 0 ? 'không cay' : `cấp ${order.spice}`;
+  return `${dish.name} ${spice}${drinks ? ` + ${drinks}` : ''} (${serviceLabel(order).toLowerCase()})`;
 }

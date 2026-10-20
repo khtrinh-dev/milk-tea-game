@@ -13,7 +13,7 @@ const targets = [
 ];
 
 for (const [name, size] of targets) {
-  // iOS không hỗ trợ icon trong suốt → làm phẳng lên nền kem.
-  await sharp(svg, { density: 384 }).resize(size, size).flatten({ background: '#f6dcc0' }).png().toFile(out(name));
+  // iOS không hỗ trợ icon trong suốt → làm phẳng lên nền đỏ.
+  await sharp(svg, { density: 384 }).resize(size, size).flatten({ background: '#e0241b' }).png().toFile(out(name));
   console.log(`✓ public/${name} (${size}×${size})`);
 }

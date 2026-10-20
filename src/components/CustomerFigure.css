@@ -1,0 +1,117 @@
+/* ---------- Nhân vật khách (CustomerFigure) ---------- */
+
+.cf {
+  display: block;
+  overflow: visible;
+}
+
+/* Tay/chân xoay quanh vai/hông: cạnh trên giữa của chính nhóm đó. */
+.cf-leg,
+.cf-arm {
+  transform-box: fill-box;
+  transform-origin: 50% 0;
+}
+
+.cf-body,
+.cf-upper {
+  transform-box: view-box;
+}
+
+.cf-walking .cf-leg-l {
+  animation: cf-leg-swing 0.5s ease-in-out infinite alternate;
+}
+
+.cf-walking .cf-leg-r {
+  animation: cf-leg-swing 0.5s ease-in-out infinite alternate-reverse;
+}
+
+.cf-walking .cf-arm-l {
+  animation: cf-arm-swing 0.5s ease-in-out infinite alternate-reverse;
+}
+
+.cf-walking .cf-arm-r:not(.cf-arm-carry) {
+  animation: cf-arm-swing 0.5s ease-in-out infinite alternate;
+}
+
+.cf-walking .cf-body {
+  animation: cf-bob 0.25s ease-in-out infinite alternate;
+}
+
+/* Đứng yên: thở nhẹ. */
+.cf:not(.cf-walking) .cf-upper {
+  animation: cf-breathe 2.4s ease-in-out infinite;
+  animation-delay: var(--cf-delay, 0s);
+}
+
+@keyframes cf-leg-swing {
+  from {
+    transform: rotate(18deg);
+  }
+  to {
+    transform: rotate(-18deg);
+  }
+}
+
+@keyframes cf-arm-swing {
+  from {
+    transform: rotate(14deg);
+  }
+  to {
+    transform: rotate(-14deg);
+  }
+}
+
+@keyframes cf-bob {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-1.8px);
+  }
+}
+
+@keyframes cf-breathe {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(0.8px);
+  }
+}
+
+/* Cay quá: khói bốc lên đầu, mặt đỏ phập phồng. */
+.cf-steam {
+  animation: cf-steam 0.9s ease-out infinite;
+}
+
+.cf-flush {
+  animation: cf-flush 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes cf-steam {
+  from {
+    transform: translateY(2px);
+    opacity: 0.9;
+  }
+  to {
+    transform: translateY(-4px);
+    opacity: 0.2;
+  }
+}
+
+@keyframes cf-flush {
+  from {
+    opacity: 0.75;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cf *,
+  .cf-walking * {
+    animation: none !important;
+  }
+}

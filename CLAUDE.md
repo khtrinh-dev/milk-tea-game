@@ -4,9 +4,11 @@ Hướng dẫn cho Claude Code (và lập trình viên) khi làm việc trong re
 
 ## Dự án
 
-**Trà Sữa Tycoon** – game giả lập quán trà sữa 2D, chạy trên trình duyệt và cài được lên iPhone dưới dạng
+**Mì Cay Tycoon** – game giả lập quán mì cay 2D (dọn quán, nấu mì theo cấp cay 0–7, 10 bàn ăn tại chỗ, mang về,
+đơn Grab), chạy trên trình duyệt và cài được lên iPhone dưới dạng
 **PWA** (Safari → Chia sẻ → Thêm vào MH chính), không cần App Store. Toàn bộ giao diện và nội dung game bằng
-**tiếng Việt**, tiền tệ là **VNĐ**.
+**tiếng Việt**, tiền tệ là **VNĐ**. Giao diện tông đỏ · trắng · đen. Repo trên GitHub tên `milk-tea-game` nên
+`base` URL và key localStorage (`milk-tea-game/...`) giữ tên này – đừng đổi, đổi là mất link game và save người chơi.
 
 Tài liệu chi tiết:
 
@@ -34,7 +36,8 @@ Trước khi báo xong một thay đổi: chạy `npm test` và `npm run build`,
 - **vite-plugin-pwa** (Workbox `generateSW`, `autoUpdate`) cho manifest + chơi offline.
 - **Vitest** cho test logic. **sharp** chỉ dùng trong `scripts/gen-icons.mjs`.
 - Font **Baloo 2** qua `@fontsource` (bundle sẵn, có subset tiếng Việt, chạy offline).
-- Đồ họa: DOM + CSS + emoji + SVG (ly trà sữa trong `CupView.tsx`). Không có canvas/game engine.
+- Đồ họa: DOM + CSS + emoji + SVG (tô mì `BowlView.tsx`, khách hàng `CustomerFigure.tsx`). Không có canvas/game engine.
+- Đăng nhập Google + lưu mây: Firebase (tải động trong `src/services/cloud.ts`), tắt khi `firebaseConfig.apiKey` trống.
 - Âm thanh: tổng hợp bằng Web Audio (`src/hooks/sound.ts`), không có file âm thanh.
 
 ## Cấu trúc
@@ -44,15 +47,16 @@ src/
   game/              # LOGIC THUẦN – không import React, không đụng DOM
     types.ts         # mọi kiểu dữ liệu
     constants.ts     # hằng số cân bằng game (thời gian, ngưỡng, xác suất…)
-    data/            # dữ liệu tĩnh: ingredients.ts, menu.ts (món + topping), staff.ts
-    orders.ts        # sinh đơn, tính giá, chấm ly, tip
+    data/            # dữ liệu tĩnh: ingredients, menu (món + nước), customers, reactions, cleaning, staff, shop
+    orders.ts        # sinh đơn, tính giá, chấm tô (độ cay → Reaction), tip
     state.ts         # GameState ban đầu + gameReducer (mọi action, kể cả TICK)
     rng.ts           # RNG có seed (seed lưu trong state)
     save.ts          # lưu/đọc localStorage
     money.ts         # format VNĐ
     *.test.ts        # unit test
   hooks/             # useGame (reducer + vòng lặp tick + autosave), sound
-  components/        # UI React
+  services/          # Firebase: đăng nhập Google, save trên Firestore
+  components/        # UI React (GameScreen, ShopScene, Workstation, BowlView, CustomerFigure, CleaningPanel…)
   styles/global.css  # toàn bộ CSS (biến màu ở :root)
 ```
 
@@ -64,7 +68,8 @@ src/
    và ghi lại `rng.seed`. Thời gian chỉ đến từ `dt` của action `TICK`.
 3. **Tiền là số nguyên VNĐ, thời gian là mili-giây.** Hiển thị qua `formatVND` / `formatShortVND`.
 4. **Số cân bằng game để trong `constants.ts` hoặc `data/`**, không viết số "ma thuật" trong logic/UI.
-5. **Thông báo cho người chơi đi qua `GameEvent`** (`emit()` trong `state.ts`). `App.tsx` biến event thành toast + âm thanh.
+5. **Thông báo cho người chơi đi qua `GameEvent`** (`emit()` trong `state.ts`). `GameScreen.tsx` biến event thành toast + âm thanh;
+   `ShopScene.tsx` dùng event để dựng hoạt cảnh (khách ăn xong, xách túi ra về…).
 6. **Đổi cấu trúc `GameState` không tương thích → tăng `SAVE_VERSION`** trong `constants.ts` (save cũ sẽ bị bỏ qua
    và người chơi bắt đầu lại). Thêm field mới có giá trị mặc định thì cân nhắc migrate trong `save.ts` thay vì tăng version.
 7. **Mobile-first cho iPhone dọc** (~375–430px). Nút bấm tối thiểu ~40px, dùng `env(safe-area-inset-*)`,
@@ -73,14 +78,17 @@ src/
 
 ## Công thức thường gặp
 
-- **Thêm món mới**: thêm vào `DRINKS` trong `src/game/data/menu.ts` (`recipe` = số lần bấm từng nguyên liệu,
-  `unlockRevenue` = doanh thu tích lũy để mở khóa). Nếu cần nguyên liệu mới, thêm `IngredientId` trong `types.ts`
-  và khai báo trong `data/ingredients.ts`. Cập nhật bảng trong `docs/GAME_DESIGN.md`.
-- **Thêm topping**: khai báo nguyên liệu `kind: 'topping'` rồi thêm vào `TOPPINGS`.
+- **Thêm món mới**: thêm `dish(...)` vào `DISHES` trong `src/game/data/menu.ts` (`recipe` = số phần từng nguyên liệu,
+  `unlockRevenue` = doanh thu tích lũy để mở khóa). Giá bán tự tính = giá vốn + `BOWL_PROFIT` (20k). Nếu cần nguyên
+  liệu mới, thêm `IngredientId` trong `types.ts`, khai báo trong `data/ingredients.ts` (giá vốn/phần) và thêm cách vẽ
+  miếng nguyên liệu trong `BowlView.tsx` (`Piece`). Cập nhật bảng trong `docs/GAME_DESIGN.md`.
+- **Thêm nước uống**: khai báo nguyên liệu `kind: 'drink'`, thêm vào `DRINKS` và `DRINK_ORDER_WEIGHTS`, vẽ trong `DrinkArt`.
+- **Thêm câu nhận xét / loại chỗ bẩn**: `data/reactions.ts` / `data/cleaning.ts`.
 - **Thêm loại nhân viên**: thêm `StaffRole` + `STAFF_TYPES`, xử lý hành vi trong `tick()` của `state.ts`,
   thêm field vào `staff` của `createInitialState` và tăng `SAVE_VERSION`.
-- **Chỉnh độ khó / nhịp game**: `constants.ts` (độ dài ngày, số khách tối đa, tip…) và `spawnInterval` /
-  `patienceFor` trong `state.ts`.
+- **Chỉnh độ khó / nhịp game**: `constants.ts` (`SPAWN_*` nhịp khách, số bàn, thời gian ăn, tỉ lệ Grab/ăn tại chỗ,
+  cấp cay…) và `spawnInterval` / `patienceFor` trong `state.ts`. Có test mô phỏng cả ngày trong `state.test.ts`
+  để giữ nhịp "không ế, không dồn dập".
 
 ## Lưu ý kỹ thuật
 
