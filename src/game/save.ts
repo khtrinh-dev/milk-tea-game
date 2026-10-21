@@ -1,5 +1,6 @@
-import { SAVE_VERSION } from './constants';
-import type { GameState } from './types';
+import { FIRST_CUSTOMER_DELAY_MS, SAVE_VERSION } from './constants';
+import { INGREDIENT_IDS, INGREDIENTS } from './data/ingredients';
+import type { GameState, ReviewEntry } from './types';
 
 const GUEST_KEY = 'my-cay-gem/save';
 /** Key của bản trước khi đổi tên repo – vẫn đọc để không mất tiến trình đã lưu trên máy. */
@@ -20,22 +21,50 @@ function legacySaveKey(uid: string | null): string {
   return uid ? `${LEGACY_KEY}/${uid}` : LEGACY_KEY;
 }
 
+/** Save v3: khách ở quầy là 1 người, bàn chỉ có khách lẻ, chưa có Pepsi/Fanta/7Up. */
+interface SaveV3 extends Omit<GameState, 'customers' | 'tables' | 'tableQueue' | 'cooks' | 'reviewLog' | 'selectedGuestId'> {
+  tables: unknown[];
+  cooks: unknown[];
+  reviewLog?: (Omit<ReviewEntry, 'partySize' | 'dishId' | 'spice'> & { dishId?: string; spice?: number })[];
+}
+
+/**
+ * v3 → v4 (thêm nhóm bạn, nước ngọt): giữ tiền, doanh thu, danh tiếng, kho, nhân viên, lịch sử đánh giá.
+ * Khách đang ở quầy / đang ăn theo cấu trúc cũ thì bỏ; ngày đang mở dở quay về lúc vừa dọn xong quán (mở cửa lại ngay).
+ */
+function migrateV3(data: SaveV3): GameState {
+  const inventory = { ...data.inventory };
+  // Nước mới thêm: tặng 1 gói như lúc mở quán.
+  for (const id of INGREDIENT_IDS) inventory[id] ??= INGREDIENTS[id].packSize;
+  const midDay = data.phase === 'open' || data.phase === 'closing';
+  return {
+    ...data,
+    version: SAVE_VERSION,
+    inventory,
+    customers: [],
+    selectedCustomerId: null,
+    selectedGuestId: null,
+    tables: data.tables.map(() => null),
+    tableQueue: [],
+    reviews: [],
+    cooks: data.cooks.map(() => ({ guestId: null, progressMs: 0 })),
+    phase: midDay ? 'prep' : data.phase,
+    dayTimeMs: midDay ? 0 : data.dayTimeMs,
+    dirt: midDay ? [] : data.dirt,
+    nextCustomerInMs: FIRST_CUSTOMER_DELAY_MS,
+    // Id đánh giá cũ là id khách (có thể trùng nhau) – đánh lại bằng số âm để không đụng id mới.
+    reviewLog: (data.reviewLog ?? []).map((r, i) => ({ ...r, id: -(i + 1), dishId: r.dishId ?? 'kimchi', spice: r.spice ?? 0, partySize: 1 })),
+  };
+}
+
 /**
  * Đưa save phiên bản cũ lên phiên bản hiện tại. Trả về null nếu không chuyển được.
  * v1, v2 là cấu trúc save cũ không còn tương thích – không chuyển, người chơi mở quán mới.
- * v3 được bổ sung giá trị mặc định cho các field thêm sau.
  */
-function migrate(data: GameState & { version: number }): GameState | null {
+function migrate(data: { version: number }): GameState | null {
+  if (data.version === 3) return migrateV3(data as SaveV3);
   if (data.version !== SAVE_VERSION) return null;
-  // Field thêm sau khi v3 đã phát hành: lịch sử đánh giá, món + cấp cay của khách đang ăn / chờ đánh giá.
-  const withOrder = <T extends { dishId?: string; spice?: number }>(x: T) => ({ ...x, dishId: x.dishId ?? 'kimchi', spice: x.spice ?? 0 });
-  return {
-    ...data,
-    reviewLog: data.reviewLog ?? [],
-    tables: data.tables.map((d) => d && withOrder(d)),
-    tableQueue: data.tableQueue.map(withOrder),
-    reviews: data.reviews.map(withOrder),
-  };
+  return data as GameState;
 }
 
 /** Đọc chuỗi JSON (từ localStorage hoặc từ mây) thành SaveFile. Hỏng → null. */

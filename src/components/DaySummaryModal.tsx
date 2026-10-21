@@ -15,13 +15,13 @@ export function DaySummaryModal({ summary, onNext }: { summary: DaySummary; onNe
     >
       <table className="summary">
         <tbody>
-          <tr><td>😋 Khách đã phục vụ</td><td>{summary.served}</td></tr>
+          <tr><td>😋 Tô giao đúng</td><td>{summary.served}</td></tr>
           <tr><td>😤 Khách bỏ về</td><td>{summary.lost}</td></tr>
-          <tr><td>❌ Tô nấu sai</td><td>{summary.wrong}</td></tr>
+          <tr><td>❌ Tô bị trả lại</td><td>{summary.wrong}</td></tr>
           <tr className="sep"><td>💵 Doanh thu</td><td>+{formatVND(summary.revenue)}</td></tr>
           <tr><td>&nbsp;&nbsp;trong đó tip</td><td>{formatVND(summary.tips)}</td></tr>
           <tr><td>📦 Nhập hàng</td><td>-{formatVND(summary.spent)}</td></tr>
-          <tr><td>🗑️ Bỏ tô nấu sai</td><td>-{formatVND(summary.wasted)}</td></tr>
+          <tr><td>🗑️ Phạt tô làm lại</td><td>-{formatVND(summary.wasted)}</td></tr>
           <tr><td>📱 Hoàn tiền khách chê</td><td>-{formatVND(summary.refunds)}</td></tr>
           <tr><td>👥 Lương nhân viên</td><td>-{formatVND(summary.salaries)}</td></tr>
           <tr className={`total ${profit >= 0 ? 'pos' : 'neg'}`}><td>Lợi nhuận</td><td>{profit >= 0 ? '+' : ''}{formatVND(profit)}</td></tr>

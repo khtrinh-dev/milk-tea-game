@@ -7,17 +7,23 @@ import {
   DIRT_SPOTS,
   FIRST_CUSTOMER_DELAY_MS,
   GRAB_PATIENCE_MUL,
+  GROUP_CHANCE,
+  GROUP_EXTRA_PATIENCE,
+  GROUP_MAX_SIZE,
+  GROUP_MIN_SIZE,
   LAST_ORDER_BEFORE_CLOSE_MS,
   MAX_CUSTOMERS,
   MAX_DRINKS,
   MAX_SPICE,
   REP_GOOD_REVIEW,
-  REVIEW_LOG_MAX,
   REP_LEFT,
+  REP_OWNER_REPLY,
   REP_PERFECT,
   REP_SPICE_BIG_MISS,
   REP_SPICE_SMALL_MISS,
   REP_WRONG_DISH,
+  REPLY_MAX,
+  REVIEW_LOG_MAX,
   REVIEW_MAX_MS,
   REVIEW_MIN_MS,
   SAVE_VERSION,
@@ -37,14 +43,16 @@ import {
   STOCKER_CHECK_MS,
   STOCKER_THRESHOLD,
   TABLE_COUNT,
+  TABLES_PER_ROW,
   WAITER_PATIENCE_BONUS,
   WRONG_DISH_PATIENCE_PENALTY,
+  WRONG_PENALTY_RATE,
 } from './constants';
 import { DIRT_TYPES } from './data/cleaning';
 import { ARCHETYPES } from './data/customers';
 import { INGREDIENT_IDS, INGREDIENTS } from './data/ingredients';
 import { stationIngredients, unlockedDishes, unlockedDrinks } from './data/menu';
-import { FEEDBACK, REACTION_STARS } from './data/reactions';
+import { COMPLAINTS, CUSTOMER_REPLY_BACK, FEEDBACK, GROUP_FEEDBACK, REACTION_STARS } from './data/reactions';
 import { STAFF_TYPES } from './data/staff';
 import { formatVND } from './money';
 import {
@@ -58,21 +66,26 @@ import {
   describeOrder,
   evaluateBowl,
   generateOrder,
+  openGuests,
+  partyTitle,
   payRate,
   randomCustomerLook,
   requiredRecipe,
+  rollService,
 } from './orders';
 import { createRng, type Rng } from './rng';
 import type {
   Bowl,
   Customer,
+  CustomerLook,
   DayStats,
-  Diner,
   DirtKind,
   DirtSpot,
   GameEventInput,
   GameState,
+  Guest,
   IngredientId,
+  Order,
   Reaction,
   Recipe,
   ReviewEntry,
@@ -88,6 +101,8 @@ export type GameAction =
   | { type: 'RENAME_SHOP'; name: string }
   | { type: 'OPEN_SHOP' }
   | { type: 'SELECT_CUSTOMER'; id: number }
+  /** Chọn một người trong nhóm bạn để nấu tô cho người đó. */
+  | { type: 'SELECT_GUEST'; id: number }
   | { type: 'ADD_INGREDIENT'; id: IngredientId }
   | { type: 'ADD_CHILI' }
   /** Bớt 1 phần nguyên liệu (hoặc 1 chai nước) đã bỏ dư – trả lại kho. */
@@ -100,6 +115,8 @@ export type GameAction =
   | { type: 'BUY_PACK'; id: IngredientId; packs?: number }
   | { type: 'HIRE'; role: StaffRole }
   | { type: 'FIRE'; role: StaffRole }
+  /** Chủ quán phản hồi một lượt đánh giá (mỗi lượt 1 lần). */
+  | { type: 'REPLY_REVIEW'; id: number; text: string }
   | { type: 'NEXT_DAY' }
   | { type: 'RESET'; seed: number; shop: ShopInfo };
 
@@ -153,6 +170,7 @@ export function createInitialState(seed: number, shop: ShopInfo): GameState {
     inventory,
     customers: [],
     selectedCustomerId: null,
+    selectedGuestId: null,
     nextCustomerInMs: FIRST_CUSTOMER_DELAY_MS,
     nextId: 1,
     bowl: emptyBowl(),
@@ -186,10 +204,10 @@ function draft(state: GameState): GameState {
   return {
     ...state,
     inventory: { ...state.inventory },
-    customers: state.customers.map((c) => ({ ...c })),
+    customers: state.customers.map((c) => ({ ...c, guests: c.guests.map((g) => ({ ...g })) })),
     bowl: { steps: [...state.bowl.steps] },
     tables: state.tables.map((d) => d && { ...d }),
-    tableQueue: state.tableQueue.map((d) => ({ ...d })),
+    tableQueue: state.tableQueue.map((party) => party.map((d) => ({ ...d }))),
     reviews: state.reviews.map((r) => ({ ...r })),
     reviewLog: [...state.reviewLog],
     dirt: state.dirt.map((d) => ({ ...d })),
@@ -230,12 +248,19 @@ function earn(s: GameState, amount: number, tip: number) {
   }
 }
 
-function patienceFor(s: GameState, customer: Pick<Customer, 'order' | 'look'>): number {
-  const items = Object.values(requiredRecipe(customer.order)).reduce((a, b) => a + (b ?? 0), 0);
-  const base = 30_000 + items * 4_000 + customer.order.spice * 600;
-  const archetype = ARCHETYPES[customer.look.archetype];
-  const channelMul = customer.order.channel === 'grab' ? GRAB_PATIENCE_MUL : 1;
-  return Math.round(base * archetype.patienceMul * channelMul * (1 + s.staff.waiter * WAITER_PATIENCE_BONUS));
+/** Thời gian chờ cho 1 tô, theo độ phức tạp của đơn và tính cách khách. */
+function bowlPatience(order: Order, look: CustomerLook): number {
+  const items = Object.values(requiredRecipe(order)).reduce((a, b) => a + (b ?? 0), 0);
+  const base = 30_000 + items * 4_000 + order.spice * 600;
+  const channelMul = order.channel === 'grab' ? GRAB_PATIENCE_MUL : 1;
+  return base * ARCHETYPES[look.archetype].patienceMul * channelMul;
+}
+
+/** Kiên nhẫn của cả lượt khách: tô đầu tính đủ, mỗi tô thêm của nhóm cộng GROUP_EXTRA_PATIENCE. */
+function patienceFor(s: GameState, guests: Pick<Guest, 'order' | 'look'>[]): number {
+  const [first, ...rest] = guests.map((g) => bowlPatience(g.order, g.look));
+  const total = rest.reduce((sum, ms) => sum + ms * GROUP_EXTRA_PATIENCE, first);
+  return Math.round(total * (1 + s.staff.waiter * WAITER_PATIENCE_BONUS));
 }
 
 /** Khoảng chờ tới khách kế tiếp: nhanh dần theo danh tiếng/ngày, chậm lại khi quầy đang dồn đơn. */
@@ -248,39 +273,78 @@ export function spawnInterval(s: Pick<GameState, 'reputation' | 'day' | 'custome
   return Math.round(base * busy * (1 - SPAWN_JITTER + rng.next() * 2 * SPAWN_JITTER));
 }
 
-function spawnCustomer(s: GameState, rng: Rng) {
-  const order = generateOrder(rng, s.totalRevenue);
-  const look = randomCustomerLook(rng, order.channel);
-  const customer: Customer = {
+function newGuest(s: GameState, rng: Rng, service: Pick<Order, 'channel' | 'dineIn'>, taken: Set<string>): Guest {
+  // Nhóm bạn không trùng tên nhau (thử lại vài lần).
+  let look = randomCustomerLook(rng, service.channel);
+  for (let i = 0; i < 5 && taken.has(look.name); i++) look = randomCustomerLook(rng, service.channel);
+  taken.add(look.name);
+  return {
     id: s.nextId++,
     ...look,
-    order,
-    patienceMs: 0,
-    waitedMs: 0,
+    order: generateOrder(rng, s.totalRevenue, service),
+    served: false,
     takenBy: null,
+    paid: 0,
+    tip: 0,
   };
-  customer.patienceMs = patienceFor(s, customer);
+}
+
+function spawnCustomer(s: GameState, rng: Rng) {
+  let service = rollService(rng);
+  let size = 1;
+  if (service.channel === 'walk-in' && rng.next() < GROUP_CHANCE) {
+    // Nhóm bạn: luôn ăn tại chỗ, mỗi người gọi 1 tô riêng.
+    size = rng.int(GROUP_MIN_SIZE, GROUP_MAX_SIZE);
+    service = { channel: 'walk-in', dineIn: true };
+  }
+  const id = s.nextId++;
+  const names = new Set<string>();
+  const guests = Array.from({ length: size }, () => newGuest(s, rng, service, names));
+  const customer: Customer = { id, guests, patienceMs: patienceFor(s, guests), waitedMs: 0 };
   s.customers.push(customer);
-  if (s.selectedCustomerId === null) s.selectedCustomerId = customer.id;
+  autoSelect(s);
+
+  const [lead] = guests;
   emit(s, {
     type: 'new-order',
-    customerId: customer.id,
+    customerId: id,
     text:
-      order.channel === 'grab'
-        ? `🛵 Đơn Grab: ${describeOrder(order)} – ${customerTitle(customer)} tới lấy`
-        : `🔔 ${customerTitle(customer)} gọi ${describeOrder(order)}`,
+      size > 1
+        ? `👯 ${partyTitle(customer)} vào quán, gọi ${size} tô ăn tại chỗ`
+        : lead.order.channel === 'grab'
+          ? `🛵 Đơn Grab: ${describeOrder(lead.order)} – ${customerTitle(lead)} tới lấy`
+          : `🔔 ${customerTitle(lead)} gọi ${describeOrder(lead.order)}`,
   });
 }
 
-/** Chọn đơn cũ nhất mà đầu bếp chưa nhận. */
+/**
+ * Giữ lượt khách đang chọn nếu còn tô người chơi nấu được, không thì chọn lượt cũ nhất còn tô.
+ * Trong lượt khách thì giữ người đang chọn, không được nữa thì chọn người đầu tiên còn chờ.
+ */
 function autoSelect(s: GameState) {
-  const next = s.customers.find((c) => c.takenBy === null);
-  s.selectedCustomerId = next ? next.id : null;
+  const current = s.customers.find((c) => c.id === s.selectedCustomerId);
+  const target = current && openGuests(current).length > 0 ? current : s.customers.find((c) => openGuests(c).length > 0);
+  if (!target) {
+    s.selectedCustomerId = null;
+    s.selectedGuestId = null;
+    return;
+  }
+  const guests = openGuests(target);
+  s.selectedCustomerId = target.id;
+  if (!guests.some((g) => g.id === s.selectedGuestId)) s.selectedGuestId = guests[0].id;
 }
 
 function removeCustomer(s: GameState, id: number) {
   s.customers = s.customers.filter((c) => c.id !== id);
-  if (s.selectedCustomerId === id) autoSelect(s);
+  autoSelect(s);
+}
+
+function findGuest(s: GameState, guestId: number | null): { customer: Customer; guest: Guest } | null {
+  for (const customer of s.customers) {
+    const guest = customer.guests.find((g) => g.id === guestId);
+    if (guest) return { customer, guest };
+  }
+  return null;
 }
 
 function hasStockFor(s: GameState, recipe: Recipe): boolean {
@@ -299,10 +363,6 @@ function buyPack(s: GameState, id: IngredientId, packs: number): boolean {
   s.dayStats.spent += cost;
   s.inventory[id] += ing.packSize * packs;
   return true;
-}
-
-function feedbackFor(rng: Rng, reaction: Reaction): string {
-  return rng.pick(FEEDBACK[reaction]);
 }
 
 function reputationFor(reaction: Reaction): number {
@@ -328,83 +388,131 @@ const REACTION_ICON: Record<Exclude<Reaction, 'bad'>, string> = {
   'not-spicy': '😒',
 };
 
-function serviceOf(order: Pick<Customer['order'], 'channel' | 'dineIn'>): ServiceKind {
+function serviceOf(order: Pick<Order, 'channel' | 'dineIn'>): ServiceKind {
   if (order.channel === 'grab') return 'grab';
   return order.dineIn ? 'dine-in' : 'takeaway';
 }
 
 /** Ghi một lượt đánh giá vào lịch sử (giữ REVIEW_LOG_MAX lượt gần nhất). */
-function logReview(s: GameState, entry: Omit<ReviewEntry, 'day' | 'stars'>) {
-  s.reviewLog.push({ ...entry, day: s.day, stars: REACTION_STARS[entry.reaction] });
+function logReview(s: GameState, entry: Omit<ReviewEntry, 'id' | 'day' | 'stars'>) {
+  s.reviewLog.push({ ...entry, id: s.nextId++, day: s.day, stars: REACTION_STARS[entry.reaction] });
   if (s.reviewLog.length > REVIEW_LOG_MAX) s.reviewLog.splice(0, s.reviewLog.length - REVIEW_LOG_MAX);
 }
 
+/** Tìm `size` bàn trống: ưu tiên các bàn liền nhau cùng dãy, không có thì ghép các bàn trống bất kỳ. */
+function freeTables(s: GameState, size: number): number[] | null {
+  for (let row = 0; row < s.tables.length; row += TABLES_PER_ROW) {
+    const end = Math.min(row + TABLES_PER_ROW, s.tables.length);
+    for (let start = row; start + size <= end; start++) {
+      const run = Array.from({ length: size }, (_, k) => start + k);
+      if (run.every((t) => s.tables[t] === null)) return run;
+    }
+  }
+  const free = s.tables.flatMap((d, t) => (d === null ? [t] : []));
+  return free.length >= size ? free.slice(0, size) : null;
+}
+
+/** Xếp các lượt khách đang chờ vào bàn (lượt nào vừa chỗ thì vào trước). */
 function seatDiners(s: GameState) {
-  for (let t = 0; t < s.tables.length && s.tableQueue.length > 0; t++) {
-    if (s.tables[t] === null) s.tables[t] = s.tableQueue.shift()!;
+  for (let i = 0; i < s.tableQueue.length; ) {
+    const party = s.tableQueue[i];
+    const tables = freeTables(s, party.length);
+    if (!tables) {
+      i++;
+      continue;
+    }
+    tables.forEach((t, k) => (s.tables[t] = party[k]));
+    s.tableQueue.splice(i, 1);
   }
 }
 
+function tablesOf(s: GameState, partyId: number): number[] {
+  return s.tables.flatMap((d, t) => (d?.partyId === partyId ? [t] : []));
+}
+
 /**
- * Giao tô đúng món cho khách (người chơi tự nấu hoặc đầu bếp nấu).
- * - Ăn tại chỗ: khách vào bàn (hết bàn thì đứng chờ), ăn xong mới nhận xét và trả tiền theo độ cay.
+ * Giao đúng tô cho một người trong lượt khách (người chơi tự nấu hoặc đầu bếp nấu).
+ * - Ăn tại chỗ: chốt tiền + tip; đủ tô cho cả nhóm thì cùng vào bàn (hết bàn thì đứng chờ), ăn xong mới trả tiền.
  * - Mang về / Grab: trả đủ tiền ngay, về nhà ăn rồi đánh giá; lệch độ cay thì quán hoàn bớt tiền.
  */
-function deliver(s: GameState, customer: Customer, reaction: Exclude<Reaction, 'bad'>, rng: Rng, tipFactor = 1) {
-  const { order } = customer;
-  const title = customerTitle(customer);
-  const feedback = feedbackFor(rng, reaction);
+function deliver(s: GameState, customer: Customer, guest: Guest, reaction: Exclude<Reaction, 'bad'>, rng: Rng, tipFactor = 1) {
+  const { order } = guest;
   const paid = Math.round((order.price * payRate(reaction)) / 1000) * 1000;
   const left = 1 - customer.waitedMs / customer.patienceMs;
-  const tipMul = ARCHETYPES[customer.look.archetype].tipMul * tipFactor;
+  const tipMul = ARCHETYPES[guest.look.archetype].tipMul * tipFactor;
   const tip = reaction === 'delicious' ? Math.round(computeTip(order.price, left, s.reputation, tipMul) / 1000) * 1000 : 0;
 
+  guest.served = true;
+  guest.takenBy = null;
   s.dayStats.served += 1;
-  removeCustomer(s, customer.id);
 
   if (order.dineIn) {
-    const diner: Diner = {
-      id: customer.id,
-      name: customer.name,
-      look: customer.look,
-      dishId: order.dishId,
-      spice: order.spice,
-      reaction,
-      feedback,
-      paid,
-      tip,
-      eatMs: rng.int(DINE_MIN_MS, DINE_MAX_MS),
-    };
-    s.tableQueue.push(diner);
+    guest.paid = paid;
+    guest.tip = tip;
+    const waiting = customer.guests.filter((g) => !g.served).length;
+    if (waiting > 0) {
+      emit(s, {
+        type: 'served',
+        customerId: customer.id,
+        dineIn: true,
+        channel: order.channel,
+        amount: 0,
+        done: false,
+        text: `🍜 ${customerTitle(guest)} đã có tô – nhóm còn chờ ${waiting} tô`,
+      });
+      autoSelect(s);
+      return;
+    }
+
+    removeCustomer(s, customer.id);
+    const eatMs = rng.int(DINE_MIN_MS, DINE_MAX_MS);
+    s.tableQueue.push(
+      customer.guests.map((g) => ({
+        id: g.id,
+        partyId: customer.id,
+        partySize: customer.guests.length,
+        name: g.name,
+        look: g.look,
+        dishId: g.order.dishId,
+        spice: g.order.spice,
+        paid: g.paid,
+        tip: g.tip,
+        eatMs,
+      })),
+    );
     seatDiners(s);
-    const table = s.tables.findIndex((d) => d?.id === diner.id);
+    const tables = tablesOf(s, customer.id);
+    const who = partyTitle(customer);
     emit(s, {
       type: 'served',
       customerId: customer.id,
       dineIn: true,
       channel: order.channel,
       amount: 0,
+      done: true,
       text:
-        table >= 0
-          ? `🍜 ${title} nhận tô, mời vào bàn ${table + 1}`
-          : `🪑 Hết bàn! ${title} bưng tô đứng chờ bàn trống`,
+        tables.length > 0
+          ? `🍜 ${who} ${customer.guests.length > 1 ? 'đủ tô, kéo nhau vào' : 'nhận tô, mời vào'} bàn ${tables.map((t) => t + 1).join(', ')}`
+          : `🪑 Hết bàn! ${who} bưng tô đứng chờ bàn trống`,
     });
     return;
   }
 
+  removeCustomer(s, customer.id);
   earn(s, order.price, tip);
   s.reviews.push({
-    id: customer.id,
-    name: customer.name,
-    look: customer.look,
+    id: guest.id,
+    name: guest.name,
+    look: guest.look,
     dishId: order.dishId,
     spice: order.spice,
     channel: order.channel,
     reaction,
-    feedback,
+    feedback: rng.pick(FEEDBACK[reaction]),
     refund: order.price - paid,
     inMs: rng.int(REVIEW_MIN_MS, REVIEW_MAX_MS),
   });
+  const title = customerTitle(guest);
   const money = `+${formatVND(order.price)}${tip ? ` (tip ${formatVND(tip)})` : ''}`;
   emit(s, {
     type: 'served',
@@ -412,25 +520,41 @@ function deliver(s: GameState, customer: Customer, reaction: Exclude<Reaction, '
     dineIn: false,
     channel: order.channel,
     amount: order.price + tip,
+    done: true,
     text: order.channel === 'grab' ? `🛵 ${title} đã lấy đơn Grab ${money}` : `🛍️ ${title} nhận mì mang về ${money}`,
   });
 }
 
-function finishMeal(s: GameState, table: number) {
-  const d = s.tables[table]!;
-  s.tables[table] = null;
-  earn(s, d.paid, d.tip);
-  changeReputation(s, reputationFor(d.reaction));
-  logReview(s, { id: d.id, name: d.name, look: d.look, service: 'dine-in', dishId: d.dishId, spice: d.spice, reaction: d.reaction, feedback: d.feedback });
-  const money = d.reaction === 'delicious' ? `+${formatVND(d.paid)}${d.tip ? ` (tip ${formatVND(d.tip)})` : ''}` : `chỉ trả ${formatVND(d.paid)}`;
+/** Lượt khách ăn tại chỗ (lẻ hoặc cả nhóm) ăn xong: trả tiền, nhận xét, trả bàn. */
+function finishMeal(s: GameState, partyId: number, rng: Rng) {
+  const tables = tablesOf(s, partyId);
+  const diners = tables.map((t) => s.tables[t]!);
+  for (const t of tables) s.tables[t] = null;
+  const paid = diners.reduce((sum, d) => sum + d.paid, 0);
+  const tip = diners.reduce((sum, d) => sum + d.tip, 0);
+  earn(s, paid, tip);
+  changeReputation(s, REP_PERFECT);
+
+  const [lead] = diners;
+  const partySize = diners.length;
+  const feedback = rng.pick(partySize > 1 ? GROUP_FEEDBACK : FEEDBACK.delicious);
+  logReview(s, {
+    name: lead.name,
+    look: lead.look,
+    service: 'dine-in',
+    dishId: lead.dishId,
+    spice: lead.spice,
+    reaction: 'delicious',
+    feedback,
+    partySize,
+  });
   emit(s, {
     type: 'finished',
-    customerId: d.id,
-    table,
-    reaction: d.reaction,
-    feedback: d.feedback,
-    amount: d.paid + d.tip,
-    text: `${REACTION_ICON[d.reaction]} ${customerTitle(d)} ăn xong: "${d.feedback}" ${money}`,
+    customerId: partyId,
+    tables,
+    feedback,
+    amount: paid + tip,
+    text: `😋 ${partyTitle({ ...lead, partySize })} ăn xong: "${feedback}" +${formatVND(paid)}${tip ? ` (tip ${formatVND(tip)})` : ''}`,
   });
 }
 
@@ -438,7 +562,6 @@ function deliverReview(s: GameState, index: number) {
   const [r] = s.reviews.splice(index, 1);
   changeReputation(s, r.reaction === 'delicious' ? REP_GOOD_REVIEW : reputationFor(r.reaction));
   logReview(s, {
-    id: r.id,
     name: r.name,
     look: r.look,
     service: r.channel === 'grab' ? 'grab' : 'takeaway',
@@ -446,6 +569,7 @@ function deliverReview(s: GameState, index: number) {
     spice: r.spice,
     reaction: r.reaction,
     feedback: r.feedback,
+    partySize: 1,
   });
   if (r.refund > 0) {
     s.money -= r.refund;
@@ -462,12 +586,14 @@ function deliverReview(s: GameState, index: number) {
   });
 }
 
-function tickTables(s: GameState, dt: number) {
-  s.tables.forEach((d, table) => {
-    if (!d) return;
+function tickTables(s: GameState, dt: number, rng: Rng) {
+  const done = new Set<number>();
+  for (const d of s.tables) {
+    if (!d) continue;
     d.eatMs -= dt;
-    if (d.eatMs <= 0) finishMeal(s, table);
-  });
+    if (d.eatMs <= 0) done.add(d.partyId);
+  }
+  for (const partyId of done) finishMeal(s, partyId, rng);
   seatDiners(s);
 }
 
@@ -489,6 +615,7 @@ function endDay(s: GameState) {
   s.lastSummary = { ...s.dayStats, day: s.day, salaries };
   s.phase = 'summary';
   s.selectedCustomerId = null;
+  s.selectedGuestId = null;
 }
 
 function tick(s: GameState, dt: number, rng: Rng) {
@@ -515,21 +642,21 @@ function tick(s: GameState, dt: number, rng: Rng) {
     if (s.customers.length === 0) s.nextCustomerInMs = Math.min(s.nextCustomerInMs, SPAWN_IDLE_MAX_MS);
   }
 
-  // Khách chờ lâu quá sẽ bỏ về
+  // Khách chờ lâu quá sẽ bỏ về (cả nhóm cùng về). Tô nào còn lại cũng đang được đầu bếp nấu thì khách vẫn vui vẻ chờ.
   for (const c of [...s.customers]) {
-    if (c.takenBy !== null) continue;
+    if (openGuests(c).length === 0) continue;
     c.waitedMs += dt;
     if (c.waitedMs >= c.patienceMs) {
       removeCustomer(s, c.id);
       changeReputation(s, REP_LEFT);
-      s.dayStats.lost += 1;
-      emit(s, { type: 'left', customerId: c.id, text: `😤 ${customerTitle(c)} chờ lâu quá nên bỏ về!` });
+      s.dayStats.lost += c.guests.length;
+      emit(s, { type: 'left', customerId: c.id, text: `😤 ${partyTitle(c)} chờ lâu quá nên bỏ về!` });
     }
   }
 
   tickCooks(s, dt, rng);
   tickStocker(s, dt);
-  tickTables(s, dt);
+  tickTables(s, dt, rng);
   tickReviews(s, dt);
 
   const diningEmpty = s.tableQueue.length === 0 && s.tables.every((d) => d === null);
@@ -539,13 +666,11 @@ function tick(s: GameState, dt: number, rng: Rng) {
 function tickCooks(s: GameState, dt: number, rng: Rng) {
   s.cookWarnCooldownMs = Math.max(0, s.cookWarnCooldownMs - dt);
   s.cooks.forEach((cook, index) => {
-    if (cook.customerId === null) {
-      // Chỉ nhường đơn đang chọn cho người chơi khi họ đã bắt đầu nấu tô đó.
+    if (cook.guestId === null) {
+      // Chỉ nhường tô đang chọn cho người chơi khi họ đã bắt đầu nấu tô đó.
       const playerBusy = s.bowl.steps.length > 0;
-      const candidates = s.customers.filter(
-        (c) => c.takenBy === null && !(playerBusy && c.id === s.selectedCustomerId),
-      );
-      const target = candidates.find((c) => hasStockFor(s, requiredRecipe(c.order)));
+      const candidates = s.customers.flatMap(openGuests).filter((g) => !(playerBusy && g.id === s.selectedGuestId));
+      const target = candidates.find((g) => hasStockFor(s, requiredRecipe(g.order)));
       if (!target) {
         if (candidates.length > 0 && s.cookWarnCooldownMs === 0) {
           emit(s, { type: 'staff', text: '👨‍🍳 Đầu bếp đang thiếu nguyên liệu!' });
@@ -555,21 +680,21 @@ function tickCooks(s: GameState, dt: number, rng: Rng) {
       }
       consume(s, requiredRecipe(target.order));
       target.takenBy = index;
-      cook.customerId = target.id;
+      cook.guestId = target.id;
       cook.progressMs = 0;
-      if (s.selectedCustomerId === target.id) autoSelect(s);
+      autoSelect(s);
       return;
     }
 
     cook.progressMs += dt;
     if (cook.progressMs < COOK_TIME_MS) return;
 
-    const customer = s.customers.find((c) => c.id === cook.customerId);
-    cook.customerId = null;
+    const found = findGuest(s, cook.guestId);
+    cook.guestId = null;
     cook.progressMs = 0;
-    if (!customer) return;
+    if (!found) return;
     // Đầu bếp nấu luôn đúng nhưng khách tip ít hơn một nửa so với chủ quán tự tay nấu.
-    deliver(s, customer, 'delicious', rng, 0.5);
+    deliver(s, found.customer, found.guest, 'delicious', rng, 0.5);
   });
 }
 
@@ -589,9 +714,43 @@ function tickStocker(s: GameState, dt: number) {
   }
 }
 
+/**
+ * Khách trả tô ngay tại quầy và đòi làm lại: bỏ cả tô, quán chịu phạt một nửa giá vốn nguyên liệu trên khay,
+ * mất danh tiếng, khách mất thêm chút kiên nhẫn nhưng vẫn đứng chờ tô mới.
+ */
+function rejectBowl(s: GameState, customer: Customer, guest: Guest, reaction: Exclude<Reaction, 'delicious'>, rng: Rng) {
+  const feedback = rng.pick(COMPLAINTS[reaction]);
+  const penalty = Math.round(bowlCost(s.bowl) * WRONG_PENALTY_RATE);
+  s.bowl = emptyBowl();
+  s.money -= penalty;
+  s.dayStats.wasted += penalty;
+  s.dayStats.wrong += 1;
+  changeReputation(s, reputationFor(reaction));
+  logReview(s, {
+    name: guest.name,
+    look: guest.look,
+    service: serviceOf(guest.order),
+    dishId: guest.order.dishId,
+    spice: guest.order.spice,
+    reaction,
+    feedback,
+    partySize: 1,
+  });
+  customer.waitedMs = Math.min(customer.patienceMs - 1, customer.waitedMs + customer.patienceMs * WRONG_DISH_PATIENCE_PENALTY);
+  emit(s, {
+    type: 'wrong',
+    customerId: customer.id,
+    reaction,
+    feedback,
+    penalty,
+    text: `😞 ${customerTitle(guest)}: "${feedback}" – làm lại tô khác, -${formatVND(penalty)}`,
+  });
+}
+
 function serve(s: GameState, rng: Rng) {
   const customer = s.customers.find((c) => c.id === s.selectedCustomerId);
-  if (!customer) {
+  let guest = customer && openGuests(customer).find((g) => g.id === s.selectedGuestId);
+  if (!customer || !guest) {
     emit(s, { type: 'error', text: 'Hãy chạm vào một khách để chọn đơn trước.' });
     return;
   }
@@ -600,45 +759,25 @@ function serve(s: GameState, rng: Rng) {
     return;
   }
 
-  const reaction = evaluateBowl(s.bowl, customer.order);
+  let reaction = evaluateBowl(s.bowl, guest.order);
+  if (reaction !== 'delicious') {
+    // Nhóm bạn: tô đúng y đơn của một bạn khác trong nhóm thì giao luôn cho bạn đó.
+    const match = openGuests(customer).find((g) => evaluateBowl(s.bowl, g.order) === 'delicious');
+    if (match) {
+      guest = match;
+      reaction = 'delicious';
+    }
+  }
 
-  if (reaction === 'bad') {
-    const title = customerTitle(customer);
-    const feedback = feedbackFor(rng, reaction);
-    // Sai món: bỏ cả tô (nguyên liệu đã dùng là mất) và bị trừ tiền bằng giá vốn nguyên liệu trên khay.
-    const penalty = bowlCost(s.bowl);
-    s.bowl = emptyBowl();
-    s.money -= penalty;
-    s.dayStats.wasted += penalty;
-    s.dayStats.wrong += 1;
-    changeReputation(s, REP_WRONG_DISH);
-    logReview(s, {
-      id: customer.id,
-      name: customer.name,
-      look: customer.look,
-      service: serviceOf(customer.order),
-      dishId: customer.order.dishId,
-      spice: customer.order.spice,
-      reaction,
-      feedback,
-    });
-    customer.waitedMs = Math.min(
-      customer.patienceMs - 1,
-      customer.waitedMs + customer.patienceMs * WRONG_DISH_PATIENCE_PENALTY,
-    );
-    emit(s, {
-      type: 'wrong',
-      customerId: customer.id,
-      reaction,
-      feedback,
-      penalty,
-      text: `😞 ${title}: "${feedback}" – bỏ tô, -${formatVND(penalty)} nguyên liệu`,
-    });
+  // Sai món thì ai cũng trả lại. Khách ăn tại chỗ nhìn màu nước dùng là biết sai độ cay nên cũng đòi làm lại;
+  // khách mang về / Grab thì về nhà ăn mới biết.
+  if (reaction === 'bad' || (guest.order.dineIn && reaction !== 'delicious')) {
+    rejectBowl(s, customer, guest, reaction, rng);
     return;
   }
 
   s.bowl = emptyBowl();
-  deliver(s, customer, reaction, rng);
+  deliver(s, customer, guest, reaction, rng);
 }
 
 export function gameReducer(state: GameState, action: GameAction): GameState {
@@ -689,7 +828,18 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'SELECT_CUSTOMER': {
       const c = s.customers.find((x) => x.id === action.id);
-      if (c && c.takenBy === null) s.selectedCustomerId = c.id;
+      const guests = c ? openGuests(c) : [];
+      if (!c || guests.length === 0) break;
+      s.selectedCustomerId = c.id;
+      if (!guests.some((g) => g.id === s.selectedGuestId)) s.selectedGuestId = guests[0].id;
+      break;
+    }
+
+    case 'SELECT_GUEST': {
+      const found = findGuest(s, action.id);
+      if (!found || found.guest.served || found.guest.takenBy !== null) break;
+      s.selectedCustomerId = found.customer.id;
+      s.selectedGuestId = found.guest.id;
       break;
     }
 
@@ -768,7 +918,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         emit(s, { type: 'error', text: `Đã đủ số ${type.name.toLowerCase()} tối đa.` });
       } else {
         s.staff[action.role] += 1;
-        if (action.role === 'cook') s.cooks.push({ customerId: null, progressMs: 0 });
+        if (action.role === 'cook') s.cooks.push({ guestId: null, progressMs: 0 });
         emit(s, { type: 'staff', text: `${type.emoji} Đã thuê 1 ${type.name.toLowerCase()} (lương ${formatVND(type.salary)}/ngày)` });
       }
       break;
@@ -780,9 +930,29 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (action.role === 'cook') {
         s.cooks.pop();
         const index = s.cooks.length;
-        // Đơn đang nấu dở trả lại hàng chờ (nguyên liệu đã dùng thì mất).
-        for (const c of s.customers) if (c.takenBy === index) c.takenBy = null;
+        // Tô đang nấu dở trả lại hàng chờ (nguyên liệu đã dùng thì mất).
+        for (const c of s.customers) for (const g of c.guests) if (g.takenBy === index) g.takenBy = null;
+        autoSelect(s);
       }
+      break;
+    }
+
+    case 'REPLY_REVIEW': {
+      const index = s.reviewLog.findIndex((r) => r.id === action.id);
+      const entry = s.reviewLog[index];
+      if (!entry || entry.reply) break;
+      const text = action.text.trim().slice(0, REPLY_MAX);
+      if (!text) {
+        emit(s, { type: 'error', text: 'Viết gì đó rồi hãy gửi nha!' });
+        break;
+      }
+      const tone = entry.stars >= 4 ? 'good' : 'bad';
+      s.reviewLog[index] = { ...entry, reply: text, replyBack: rng.pick(CUSTOMER_REPLY_BACK[tone]) };
+      if (tone === 'bad') changeReputation(s, REP_OWNER_REPLY);
+      emit(s, {
+        type: 'info',
+        text: `💬 Đã phản hồi ${partyTitle(entry)}${tone === 'bad' ? ' – khách nguôi giận, danh tiếng tăng nhẹ' : ''}`,
+      });
       break;
     }
 
@@ -795,6 +965,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       s.nextCustomerInMs = FIRST_CUSTOMER_DELAY_MS;
       s.customers = [];
       s.selectedCustomerId = null;
+      s.selectedGuestId = null;
       s.tables = s.tables.map(() => null);
       s.tableQueue = [];
       s.reviews = [];

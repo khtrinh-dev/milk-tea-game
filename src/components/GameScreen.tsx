@@ -23,7 +23,7 @@ import { Workstation } from './Workstation';
 
 const TOAST_MS = 2_800;
 const MAX_TOASTS = 2;
-const TUTORIAL_KEY = 'my-cay-gem/tutorial-v1-seen';
+const TUTORIAL_KEY = 'my-cay-gem/tutorial-v2-seen';
 
 const SOUND_FOR: Partial<Record<GameEvent['type'], Parameters<typeof playSound>[0]>> = {
   'new-order': 'order',
@@ -115,7 +115,7 @@ export function GameScreen({ initialState, player, muted, onToggleMute, onExit, 
       {modal === 'stock' && <StockModal state={state} dispatch={dispatch} onClose={() => setModal(null)} />}
       {modal === 'recipes' && <RecipeModal state={state} onClose={() => setModal(null)} />}
       {modal === 'staff' && <StaffModal state={state} dispatch={dispatch} onClose={() => setModal(null)} />}
-      {modal === 'reviews' && <ReviewsModal state={state} onClose={() => setModal(null)} />}
+      {modal === 'reviews' && <ReviewsModal state={state} dispatch={dispatch} onClose={() => setModal(null)} />}
       {modal === 'settings' && (
         <SettingsModal
           player={player}

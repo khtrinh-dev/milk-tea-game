@@ -1,8 +1,10 @@
+import { Fragment } from 'react';
 import { MAX_SPICE } from '../game/constants';
 import { INGREDIENTS } from '../game/data/ingredients';
 import { DISHES, DRINKS, recipeCost } from '../game/data/menu';
 import { formatShortVND, formatVND } from '../game/money';
 import type { GameState, IngredientId } from '../game/types';
+import { IngredientIcon } from './IngredientIcon';
 import { Modal } from './Modal';
 
 export function RecipeModal({ state, onClose }: { state: GameState; onClose: () => void }) {
@@ -22,7 +24,14 @@ export function RecipeModal({ state, onClose }: { state: GameState; onClose: () 
                 <div className="recipe-steps">
                   {locked
                     ? `Mở khóa khi doanh thu đạt ${formatShortVND(d.unlockRevenue)}`
-                    : (Object.keys(d.recipe) as IngredientId[]).map((id) => `${INGREDIENTS[id].emoji} ${INGREDIENTS[id].name}`).join(' + ')}
+                    : (Object.keys(d.recipe) as IngredientId[]).map((id, i) => (
+                        <Fragment key={id}>
+                          {i > 0 && ' + '}
+                          <span className="recipe-ing">
+                            <IngredientIcon id={id} size={15} /> {INGREDIENTS[id].name}
+                          </span>
+                        </Fragment>
+                      ))}
                 </div>
                 {!locked && <small className="recipe-cost">Vốn {formatVND(recipeCost(d.recipe))} · lời {formatVND(d.price - recipeCost(d.recipe))}</small>}
               </div>
@@ -37,7 +46,7 @@ export function RecipeModal({ state, onClose }: { state: GameState; onClose: () 
           const ing = INGREDIENTS[d.id];
           return (
             <li key={d.id} className={locked ? 'locked' : ''}>
-              <span className="recipe-emoji">{locked ? '🔒' : ing.emoji}</span>
+              <span className="recipe-emoji">{locked ? '🔒' : <IngredientIcon id={d.id} size={30} />}</span>
               <div>
                 <b>{ing.name}</b> <span className="price">+{formatVND(d.price)}</span>
                 {locked && <div className="recipe-steps">Mở khóa khi doanh thu đạt {formatShortVND(d.unlockRevenue)}</div>}

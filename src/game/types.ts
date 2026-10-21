@@ -13,6 +13,9 @@ export type IngredientId =
   | 'cauliflower'
   | 'sausage'
   | 'coca'
+  | 'pepsi'
+  | 'fanta'
+  | 'sevenup'
   | 'milk';
 
 /** noodle = mì, meat = thịt · hải sản · viên, veggie = rau · nấm · kim chi, drink = nước uống kèm. */
@@ -37,6 +40,8 @@ export type Recipe = Partial<Record<IngredientId, number>>;
 export interface Dish {
   id: string;
   name: string;
+  /** Tên ngắn hiện trong bong bóng đơn của nhóm bạn, ví dụ "Bò". */
+  short: string;
   emoji: string;
   recipe: Recipe;
   price: number;
@@ -53,6 +58,7 @@ export interface DrinkItem {
 /** Đơn đến từ khách vào quán trực tiếp hay đặt qua Grab (tài xế tới lấy). */
 export type OrderChannel = 'walk-in' | 'grab';
 
+/** Đơn của một người: 1 tô mì + nước kèm. */
 export interface Order {
   channel: OrderChannel;
   /** Ăn tại chỗ (cần bàn) hay mua mang về. Đơn Grab luôn mang về. */
@@ -100,17 +106,32 @@ export interface CustomerLook {
   hair: number;
 }
 
-export interface Customer {
+/** Một người trong lượt khách: mỗi người gọi 1 tô. */
+export interface Guest {
   id: number;
   /** Tên khách vào quán, hoặc tên tài xế Grab tới lấy đơn. */
   name: string;
   look: CustomerLook;
   order: Order;
+  /** Đã nhận đúng tô. */
+  served: boolean;
+  /** Index đầu bếp đang nấu tô của người này (nếu có). */
+  takenBy: number | null;
+  /** Tiền món + tip chốt lúc giao tô – khách ăn tại chỗ trả khi ăn xong. */
+  paid: number;
+  tip: number;
+}
+
+/**
+ * Một lượt khách ở quầy: khách lẻ (1 người) hoặc nhóm bạn (2–4 người, luôn ăn tại chỗ, đủ tô mới cùng vào bàn).
+ * Cả nhóm dùng chung một thanh kiên nhẫn.
+ */
+export interface Customer {
+  id: number;
+  guests: Guest[];
   /** Tổng thời gian khách chịu chờ. */
   patienceMs: number;
   waitedMs: number;
-  /** Index đầu bếp đang nấu đơn này (nếu có). */
-  takenBy: number | null;
 }
 
 /** Một thao tác với tô: bỏ 1 phần nguyên liệu (hoặc 1 chai nước lên khay), hoặc 1 shot ớt. */
@@ -122,23 +143,28 @@ export interface Bowl {
 }
 
 /**
- * Cảm nhận của khách sau khi ăn:
+ * Cảm nhận của khách về tô mì:
  * - delicious: đúng món, đúng độ cay
  * - spicy / very-spicy: cay hơn yêu cầu (lệch ít / nhiều)
  * - mild / not-spicy: ít cay hơn yêu cầu (lệch ít / nhiều)
- * - bad: sai món – tô bị bỏ
+ * - bad: sai món – tô bị trả lại
  */
 export type Reaction = 'delicious' | 'spicy' | 'very-spicy' | 'mild' | 'not-spicy' | 'bad';
 
-/** Khách đã nhận tô, ngồi ăn tại bàn (hoặc đứng chờ bàn trống). Trả tiền khi ăn xong. */
+/**
+ * Khách đã nhận đúng tô, ngồi ăn tại bàn (hoặc đứng chờ bàn trống). Trả tiền khi ăn xong.
+ * Nhóm bạn ngồi các bàn cạnh nhau và ăn xong cùng lúc.
+ */
 export interface Diner {
+  /** Id người khách (Guest.id). */
   id: number;
+  /** Id lượt khách (Customer.id) – các bạn cùng nhóm chung partyId. */
+  partyId: number;
+  partySize: number;
   name: string;
   look: CustomerLook;
   dishId: string;
   spice: number;
-  reaction: Exclude<Reaction, 'bad'>;
-  feedback: string;
   /** Tiền món và tip khách sẽ trả khi ăn xong. */
   paid: number;
   tip: number;
@@ -164,6 +190,7 @@ export type ServiceKind = 'dine-in' | 'takeaway' | 'grab';
 
 /** Một lượt đánh giá của khách – lưu lại để xem ở tab Đánh giá. */
 export interface ReviewEntry {
+  /** Id riêng của lượt đánh giá (một khách có thể vừa chê tô sai vừa khen sau khi ăn). */
   id: number;
   day: number;
   name: string;
@@ -176,6 +203,12 @@ export interface ReviewEntry {
   feedback: string;
   /** 1–5 sao. */
   stars: number;
+  /** Số người trong nhóm (1 = khách lẻ). */
+  partySize: number;
+  /** Chủ quán phản hồi. */
+  reply?: string;
+  /** Khách đáp lại phản hồi của chủ quán. */
+  replyBack?: string;
 }
 
 export type DirtKind = 'trash' | 'stain' | 'web' | 'dishes' | 'dust';
@@ -205,7 +238,8 @@ export interface StaffType {
 }
 
 export interface Cook {
-  customerId: number | null;
+  /** Guest.id của tô đang nấu. */
+  guestId: number | null;
   progressMs: number;
 }
 
@@ -217,7 +251,9 @@ export interface DayStats {
   wasted: number;
   /** Tiền hoàn cho khách mang về / Grab chê độ cay. */
   refunds: number;
+  /** Số tô giao đúng. */
   served: number;
+  /** Số người bỏ về. */
   lost: number;
   wrong: number;
 }
@@ -229,15 +265,26 @@ export interface DaySummary extends DayStats {
 
 export type GameEvent =
   | { id: number; type: 'new-order'; customerId: number; text: string }
-  /** Giao tô cho khách ở quầy. `amount` = tiền nhận ngay (khách ăn tại chỗ trả sau khi ăn xong nên = 0). */
-  | { id: number; type: 'served'; customerId: number; dineIn: boolean; channel: OrderChannel; amount: number; text: string }
-  /** Khách ăn tại chỗ ăn xong ở bàn `table`: nhận xét + trả tiền. */
+  /**
+   * Giao 1 tô cho một người trong lượt khách `customerId`. `amount` = tiền nhận ngay (ăn tại chỗ trả sau nên = 0).
+   * `done` = cả lượt khách đã nhận đủ tô và rời quầy.
+   */
+  | {
+      id: number;
+      type: 'served';
+      customerId: number;
+      dineIn: boolean;
+      channel: OrderChannel;
+      amount: number;
+      done: boolean;
+      text: string;
+    }
+  /** Khách ăn tại chỗ (lẻ hoặc cả nhóm) ăn xong ở các bàn `tables`: nhận xét + trả tiền. */
   | {
       id: number;
       type: 'finished';
       customerId: number;
-      table: number;
-      reaction: Exclude<Reaction, 'bad'>;
+      tables: number[];
       feedback: string;
       amount: number;
       text: string;
@@ -252,7 +299,16 @@ export type GameEvent =
       refund: number;
       text: string;
     }
-  | { id: number; type: 'wrong'; customerId: number; reaction: 'bad'; feedback: string; text: string; penalty: number }
+  /** Tô bị trả lại ngay ở quầy (sai món, hoặc khách ăn tại chỗ thấy sai độ cay) – phải làm lại. */
+  | {
+      id: number;
+      type: 'wrong';
+      customerId: number;
+      reaction: Exclude<Reaction, 'delicious'>;
+      feedback: string;
+      text: string;
+      penalty: number;
+    }
   | { id: number; type: 'left'; customerId: number; text: string }
   | { id: number; type: 'clean'; text: string }
   | { id: number; type: 'unlock'; text: string }
@@ -287,13 +343,15 @@ export interface GameState {
   inventory: Record<IngredientId, number>;
   customers: Customer[];
   selectedCustomerId: number | null;
+  /** Người trong lượt khách đang chọn mà người chơi đang nấu tô cho. */
+  selectedGuestId: number | null;
   nextCustomerInMs: number;
   nextId: number;
   bowl: Bowl;
   /** Bàn ăn: mỗi phần tử là khách đang ngồi ăn hoặc null nếu bàn trống. */
   tables: (Diner | null)[];
-  /** Khách ăn tại chỗ đã nhận tô nhưng hết bàn, đang đứng chờ. */
-  tableQueue: Diner[];
+  /** Lượt khách ăn tại chỗ đã nhận đủ tô nhưng chưa có bàn, đang đứng chờ (mỗi phần tử là 1 lượt: lẻ hoặc nhóm). */
+  tableQueue: Diner[][];
   reviews: PendingReview[];
   /** Lịch sử đánh giá gần đây (mới nhất ở cuối). */
   reviewLog: ReviewEntry[];
