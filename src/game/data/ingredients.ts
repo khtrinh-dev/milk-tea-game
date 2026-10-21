@@ -8,6 +8,7 @@ function ingredient(id: IngredientId, name: string, emoji: string, kind: Ingredi
   return { id, name, emoji, kind, color, packSize: PACK_SIZE, packPrice: unitPrice * PACK_SIZE };
 }
 
+// `emoji` chỉ dùng trong chữ (toast, hướng dẫn); hình ở quầy / thẻ đơn vẽ bằng IngredientIcon.tsx.
 export const INGREDIENTS: Record<IngredientId, Ingredient> = {
   noodle: ingredient('noodle', 'Mì', '🍜', 'noodle', '#f3c64f', 15_000),
 
@@ -17,12 +18,15 @@ export const INGREDIENTS: Record<IngredientId, Ingredient> = {
   beef: ingredient('beef', 'Bò', '🥩', 'meat', '#a8433a', 30_000),
   sausage: ingredient('sausage', 'Xúc xích', '🌭', 'meat', '#e0584a', 10_000),
 
-  kimchi: ingredient('kimchi', 'Kim chi', '🥬', 'veggie', '#e2452f', 5_000),
+  kimchi: ingredient('kimchi', 'Kim chi', '🌶️', 'veggie', '#e8532f', 5_000),
   enoki: ingredient('enoki', 'Nấm kim châm', '🍄', 'veggie', '#f6f0dc', 10_000),
-  purple_cabbage: ingredient('purple_cabbage', 'Cải tím', '🟣', 'veggie', '#8e3fa0', 5_000),
+  purple_cabbage: ingredient('purple_cabbage', 'Cải tím', '🥬', 'veggie', '#8e3fa0', 5_000),
   cauliflower: ingredient('cauliflower', 'Súp lơ', '🥦', 'veggie', '#5fa83f', 5_000),
 
   coca: ingredient('coca', 'Coca Cola', '🥤', 'drink', '#d81e1e', 10_000),
+  pepsi: ingredient('pepsi', 'Pepsi', '🥤', 'drink', '#1d4fa0', 10_000),
+  fanta: ingredient('fanta', 'Fanta', '🥤', 'drink', '#ff8a00', 10_000),
+  sevenup: ingredient('sevenup', '7Up', '🥤', 'drink', '#1f9d3a', 10_000),
   milk: ingredient('milk', 'Sữa', '🥛', 'drink', '#f4f6fb', 10_000),
 };
 

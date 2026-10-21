@@ -941,6 +941,13 @@ h3 {
   z-index: 4;
 }
 
+/* Bàn của nhóm bạn: viền vàng nối các bàn liền nhau. */
+.table-spot.party .table-top {
+  box-shadow:
+    0 0 0 2px #ffc531,
+    0 3px 0 rgba(0, 0, 0, 0.3);
+}
+
 .table-top {
   position: absolute;
   left: 0;
@@ -1210,11 +1217,15 @@ h3 {
   bottom: calc(100% - 4px);
   left: 50%;
   transform: translateX(-50%);
+  width: max-content;
+  min-width: 64px;
+  max-width: 82px;
   background: #fff;
   border: 2px solid var(--black);
-  border-radius: 12px;
-  padding: 1px 5px 3px;
-  white-space: nowrap;
+  border-radius: 10px;
+  padding: 2px 4px 3px;
+  text-align: center;
+  line-height: 1.12;
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
   z-index: 5;
 }
@@ -1234,29 +1245,84 @@ h3 {
   border-bottom: 0;
 }
 
-.bubble-items {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  font-size: 16px;
-  line-height: 1.3;
-}
-
-.bubble-service {
-  font-size: 13px;
-}
-
-.bubble-spice {
-  font-size: 11.5px;
+/* Tên món + cấp cay (khách lẻ) hoặc danh sách tô của nhóm bạn. */
+.bubble-dish {
+  font-size: 10.5px;
   font-weight: 700;
-  color: #fff;
-  background: var(--red);
-  border-radius: 8px;
-  padding: 0 4px 0 2px;
 }
 
-.bubble-top {
-  font-size: 13px;
+.bubble-sub {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--red);
+}
+
+.bubble-head {
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.bubble-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.bubble-list li {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 2px;
+  border-radius: 4px;
+}
+
+.bubble-list li.current {
+  background: var(--red);
+  color: #fff;
+}
+
+.bubble-list li.done {
+  color: var(--ok);
+  text-decoration: line-through;
+}
+
+.bubble-list li.cooking {
+  color: var(--muted);
+}
+
+/* Ăn tại chỗ / mang về / Grab – nhãn chữ có màu. */
+.bubble-service {
+  display: inline-block;
+  margin-top: 1px;
+  font-size: 9.5px;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 0 4px;
+  border: 1.5px solid var(--black);
+  background: #fff3c4;
+  white-space: nowrap;
+}
+
+.bubble-service.dine {
+  background: var(--red-soft);
+}
+
+.bubble-service.grab {
+  background: #00a651;
+  color: #fff;
+}
+
+/* Nhóm bạn đứng chen nhau. */
+.crowd {
+  display: flex;
+  align-items: flex-end;
+}
+
+.crowd.party .cf + .cf {
+  margin-left: -28px;
 }
 
 .actor.selected .bubble {
@@ -1474,6 +1540,69 @@ h3 {
   fill: #fff;
 }
 
+.drink-label.fanta {
+  fill: #1f3f99;
+  stroke: #fff;
+  stroke-width: 0.6px;
+  paint-order: stroke;
+}
+
+.drink-label.seven {
+  fill: #1f9d3a;
+  font-size: 11px;
+}
+
+.drink-label.seven-up {
+  fill: #1f9d3a;
+  font-size: 6.5px;
+}
+
+/* Nhóm bạn trên thẻ đơn: chạm để chọn bạn cần nấu. */
+.party-chips {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 3px;
+  margin: 0 0 2px -4px;
+  padding: 0 4px 1px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.party-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.party-chip {
+  flex-shrink: 0;
+  border: 1.5px solid var(--black);
+  background: #fff;
+  border-radius: 999px;
+  padding: 0 7px;
+  min-height: 28px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.party-chip.active {
+  background: var(--red);
+  border-color: var(--red-dark);
+  color: #fff;
+}
+
+.party-chip.done {
+  color: var(--ok);
+  border-color: var(--ok);
+  opacity: 1;
+}
+
+.party-chip.cooking {
+  color: var(--muted);
+  border-style: dashed;
+  opacity: 1;
+}
+
 .order-card {
   flex: 1;
   min-width: 0;
@@ -1503,6 +1632,7 @@ h3 {
 .order-title {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 6px;
   font-weight: 700;
   font-size: 12px;
@@ -1565,7 +1695,7 @@ h3 {
   gap: 3px;
   padding: 0;
   border-bottom: 1px dotted var(--line);
-  line-height: 1.35;
+  line-height: 1.22;
   min-width: 0;
 }
 
@@ -1663,7 +1793,7 @@ h3 {
 }
 
 .chili-dot {
-  font-size: 17px;
+  font-size: 15px;
   filter: grayscale(1) brightness(1.6);
   opacity: 0.35;
   transition: transform 0.15s;
@@ -1690,10 +1820,10 @@ h3 {
   color: #ffc531;
 }
 
-/* Quầy chia cụm: Mì | Thịt · Hải sản (hàng 1) và Rau | Nước uống (hàng 2). */
+/* Quầy chia cụm: Mì | Rau (hàng 1), Thịt · Hải sản (hàng 2), Nước uống (hàng 3). */
 .ing-groups {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 6px 5px;
   margin-top: 6px;
 }
@@ -1750,8 +1880,8 @@ h3 {
   flex-direction: column;
   align-items: center;
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
-  min-height: 60px;
-  padding: 3px 1px 2px;
+  min-height: 54px;
+  padding: 2px 1px 1px;
 }
 
 /* Nút bớt 1 phần đã bỏ vào tô (góc trên phải mỗi nguyên liệu). */
@@ -1830,14 +1960,43 @@ h3 {
   border-style: dashed;
 }
 
-.ing-btn.out .ing-emoji {
+.ing-btn.out .ing-emoji > * {
   filter: grayscale(1);
   opacity: 0.5;
 }
 
 .ing-emoji {
-  font-size: 21px;
-  line-height: 1.15;
+  height: 27px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.ing-emoji .drink-art,
+.check-name .drink-art,
+.recipe-ing .drink-art {
+  animation: none;
+}
+
+.ing-emoji-text {
+  line-height: 1;
+}
+
+/* Icon nhỏ trong dòng chữ (thẻ đơn, thực đơn). */
+.check-name svg,
+.recipe-ing svg {
+  display: inline-block;
+  vertical-align: -3px;
+}
+
+.check-name .ing-emoji-text,
+.recipe-ing .ing-emoji-text {
+  font-size: 12px !important;
+}
+
+.recipe-ing {
+  white-space: nowrap;
 }
 
 .ing-name {
@@ -1992,6 +2151,88 @@ h3 {
 .review-body small {
   color: var(--muted);
   font-size: 11.5px;
+}
+
+.modal-note.small {
+  font-size: 12px;
+  margin: 0 0 8px;
+}
+
+/* Chủ quán phản hồi đánh giá. */
+.reply-open {
+  margin-top: 4px;
+  min-height: 32px;
+}
+
+.review-thread {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.review-reply,
+.review-reply-back {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.3;
+  border-radius: 10px;
+  padding: 3px 8px;
+}
+
+.review-reply {
+  background: var(--red-soft);
+  margin-left: 10px;
+}
+
+.review-reply-back {
+  background: #f1f1f1;
+  margin-left: 20px;
+}
+
+.reply-box {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.reply-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.reply-preset {
+  border: 1.5px solid var(--black);
+  background: #fff;
+  border-radius: 12px;
+  padding: 3px 8px;
+  min-height: 32px;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.reply-preset.active {
+  background: var(--black);
+  color: #fff;
+}
+
+.reply-form {
+  display: flex;
+  gap: 5px;
+}
+
+/* 16px để Safari iOS không tự phóng to khi gõ. */
+.reply-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 16px;
+  border: 2px solid var(--black);
+  border-radius: 10px;
+  padding: 4px 8px;
 }
 
 /* ---------- Toast ---------- */

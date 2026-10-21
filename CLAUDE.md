@@ -4,8 +4,8 @@ Hướng dẫn cho Claude Code (và lập trình viên) khi làm việc trong re
 
 ## Dự án
 
-**Mì Cay Tycoon** – game giả lập quán mì cay 2D (dọn quán, nấu mì theo cấp cay 0–7, 10 bàn ăn tại chỗ, mang về,
-đơn Grab), chạy trên trình duyệt và cài được lên iPhone dưới dạng
+**Mì Cay Tycoon** – game giả lập quán mì cay 2D (dọn quán, nấu mì theo cấp cay 0–7, 10 bàn ăn tại chỗ, nhóm bạn,
+mang về, đơn Grab), chạy trên trình duyệt và cài được lên iPhone dưới dạng
 **PWA** (Safari → Chia sẻ → Thêm vào MH chính), không cần App Store. Toàn bộ giao diện và nội dung game bằng
 **tiếng Việt**, tiền tệ là **VNĐ**. Giao diện tông đỏ · trắng · đen. Repo GitHub: `khtrinh-dev/my-cay-gem`,
 game chạy tại https://khtrinh-dev.github.io/my-cay-gem/.
@@ -80,10 +80,10 @@ src/
 ## Công thức thường gặp
 
 - **Thêm món mới**: thêm `dish(...)` vào `DISHES` trong `src/game/data/menu.ts` (`recipe` = số phần từng nguyên liệu,
-  `unlockRevenue` = doanh thu tích lũy để mở khóa). Giá bán tự tính = giá vốn + `BOWL_PROFIT` (20k). Nếu cần nguyên
+  `unlockRevenue` = doanh thu tích lũy để mở khóa). Giá bán tự tính = giá vốn + `BOWL_PROFIT` (50k). Nếu cần nguyên
   liệu mới, thêm `IngredientId` trong `types.ts`, khai báo trong `data/ingredients.ts` (giá vốn/phần) và thêm cách vẽ
-  miếng nguyên liệu trong `BowlView.tsx` (`Piece`). Cập nhật bảng trong `docs/GAME_DESIGN.md`.
-- **Thêm nước uống**: khai báo nguyên liệu `kind: 'drink'`, thêm vào `DRINKS` và `DRINK_ORDER_WEIGHTS`, vẽ trong `DrinkArt`.
+  miếng nguyên liệu trong `BowlView.tsx` (`Piece`); không có emoji đúng hình thì vẽ icon SVG trong `IngredientIcon.tsx`. Cập nhật bảng trong `docs/GAME_DESIGN.md`.
+- **Thêm nước uống**: khai báo nguyên liệu `kind: 'drink'`, thêm vào `DRINKS` và `DRINK_ORDER_WEIGHTS`, vẽ lon/hộp trong `DrinkShape` (`BowlView.tsx`).
 - **Thêm câu nhận xét / loại chỗ bẩn**: `data/reactions.ts` / `data/cleaning.ts`.
 - **Thêm loại nhân viên**: thêm `StaffRole` + `STAFF_TYPES`, xử lý hành vi trong `tick()` của `state.ts`,
   thêm field vào `staff` của `createInitialState` và tăng `SAVE_VERSION`.

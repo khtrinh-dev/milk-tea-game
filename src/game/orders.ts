@@ -12,7 +12,7 @@ import { ARCHETYPES, HAIR_COLORS, SKIN_TONES } from './data/customers';
 import { INGREDIENTS, unitCost } from './data/ingredients';
 import { DISH_BY_ID, DRINK_BY_ID, unlockedDishes, unlockedDrinks } from './data/menu';
 import type { Rng } from './rng';
-import type { ArchetypeId, Bowl, CustomerLook, IngredientId, Order, OrderChannel, Reaction, Recipe } from './types';
+import type { ArchetypeId, Bowl, Customer, CustomerLook, Guest, IngredientId, Order, OrderChannel, Reaction, Recipe } from './types';
 
 /** Khách vào quán: mọi kiểu khách trừ tài xế Grab (anh Grab chỉ tới lấy đơn đặt qua app). */
 const WALK_IN_WEIGHTS = Object.fromEntries(
@@ -36,9 +36,27 @@ export function customerTitle(customer: { name: string; look: CustomerLook }): s
   return `${ARCHETYPES[customer.look.archetype].title} ${customer.name}`;
 }
 
-export function generateOrder(rng: Rng, totalRevenue: number): Order {
+/** Những người trong lượt khách còn chờ tô mà chưa có đầu bếp nhận – người chơi chọn nấu cho họ được. */
+export function openGuests(customer: Pick<Customer, 'guests'>): Guest[] {
+  return customer.guests.filter((g) => !g.served && g.takenBy === null);
+}
+
+/** Tên một lượt khách: khách lẻ như customerTitle, nhóm bạn thì "Nhóm 3 bạn của Linh". */
+export function partyTitle(party: Pick<Customer, 'guests'> | { name: string; look: CustomerLook; partySize: number }): string {
+  const size = 'guests' in party ? party.guests.length : party.partySize;
+  const lead = 'guests' in party ? party.guests[0] : party;
+  return size > 1 ? `Nhóm ${size} bạn của ${lead.name}` : customerTitle(lead);
+}
+
+/** Kiểu phục vụ của khách lẻ: Grab (luôn mang về) hoặc khách vào quán ăn tại chỗ / mang về. */
+export function rollService(rng: Rng): Pick<Order, 'channel' | 'dineIn'> {
   const channel: OrderChannel = rng.next() < GRAB_ORDER_CHANCE ? 'grab' : 'walk-in';
-  const dineIn = channel === 'walk-in' && rng.next() < DINE_IN_CHANCE;
+  return { channel, dineIn: channel === 'walk-in' && rng.next() < DINE_IN_CHANCE };
+}
+
+/** Sinh đơn 1 tô; không truyền `service` thì tự gieo kiểu phục vụ như khách lẻ. */
+export function generateOrder(rng: Rng, totalRevenue: number, service?: Pick<Order, 'channel' | 'dineIn'>): Order {
+  const { channel, dineIn } = service ?? rollService(rng);
   const dish = rng.pick(unlockedDishes(totalRevenue));
   const available = new Set(unlockedDrinks(totalRevenue).map((d) => d.id as string));
   const weights = Object.fromEntries(
@@ -143,10 +161,14 @@ export function serviceLabel(order: Pick<Order, 'channel' | 'dineIn'>): string {
   return order.dineIn ? 'Ăn tại chỗ' : 'Mang về';
 }
 
+/** Cấp cay viết ngắn: "không cay" / "cấp 3". */
+export function spiceShort(level: number): string {
+  return level === 0 ? 'không cay' : `cấp ${level}`;
+}
+
 /** Mô tả ngắn để hiện thông báo: "Mì cay bò cấp 3 + Coca Cola (mang về)". */
 export function describeOrder(order: Order): string {
   const dish = DISH_BY_ID[order.dishId];
   const drinks = order.drinks.map((d) => INGREDIENTS[d].name).join(', ');
-  const spice = order.spice === 0 ? 'không cay' : `cấp ${order.spice}`;
-  return `${dish.name} ${spice}${drinks ? ` + ${drinks}` : ''} (${serviceLabel(order).toLowerCase()})`;
+  return `${dish.name} ${spiceShort(order.spice)}${drinks ? ` + ${drinks}` : ''} (${serviceLabel(order).toLowerCase()})`;
 }

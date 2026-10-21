@@ -14,6 +14,7 @@ import {
   evaluateBowl,
   generateOrder,
   orderPrice,
+  partyTitle,
   payRate,
   randomCustomerLook,
   requiredRecipe,
@@ -30,20 +31,25 @@ const beefOrder: Order = {
   price: orderPrice({ dishId: 'beef', drinks: ['coca'] }),
 };
 
-const BEEF_BOWL: BowlStep[] = ['noodle', 'kimchi', 'beef', 'cauliflower', 'enoki', 'sausage', 'coca'];
+const BEEF_BOWL: BowlStep[] = ['noodle', 'kimchi', 'purple_cabbage', 'beef', 'cauliflower', 'enoki', 'sausage', 'coca'];
 const chili = (n: number): BowlStep[] => Array.from({ length: n }, () => 'chili');
 
 describe('thực đơn', () => {
-  it('giá mỗi tô = giá vốn nguyên liệu + 20k', () => {
-    expect(DISH_BY_ID.kimchi.price).toBe(55_000 + 20_000);
-    expect(DISH_BY_ID.beef.price).toBe(75_000 + 20_000);
-    expect(DISH_BY_ID.seafood.price).toBe(80_000 + 20_000);
-    expect(DISH_BY_ID.combo.price).toBe(110_000 + 20_000);
+  it('giá mỗi tô = giá vốn nguyên liệu + 50k', () => {
+    expect(BOWL_PROFIT).toBe(50_000);
+    expect(DISH_BY_ID.kimchi.price).toBe(60_000 + 50_000);
+    expect(DISH_BY_ID.beef.price).toBe(80_000 + 50_000);
+    expect(DISH_BY_ID.seafood.price).toBe(85_000 + 50_000);
+    expect(DISH_BY_ID.combo.price).toBe(115_000 + 50_000);
     for (const dish of Object.values(DISH_BY_ID)) expect(dish.price - recipeCost(dish.recipe)).toBe(BOWL_PROFIT);
   });
 
+  it('món nào cũng có cải tím và kim chi', () => {
+    for (const dish of Object.values(DISH_BY_ID)) expect(dish.recipe).toMatchObject({ purple_cabbage: 1, kimchi: 1 });
+  });
+
   it('nước uống vốn 10k, bán 15k', () => {
-    for (const id of ['coca', 'milk'] as const) {
+    for (const id of ['coca', 'pepsi', 'fanta', 'sevenup', 'milk'] as const) {
       expect(unitCost(id)).toBe(10_000);
       expect(DRINK_BY_ID[id]?.price).toBe(15_000);
     }
@@ -52,11 +58,11 @@ describe('thực đơn', () => {
 
 describe('orders', () => {
   it('tính giá = giá món + nước', () => {
-    expect(beefOrder.price).toBe(95_000 + 15_000);
+    expect(beefOrder.price).toBe(130_000 + 15_000);
   });
 
   it('khay cần có món + nước khách gọi', () => {
-    expect(requiredRecipe(beefOrder)).toEqual({ noodle: 1, kimchi: 1, beef: 1, cauliflower: 1, enoki: 1, sausage: 1, coca: 1 });
+    expect(requiredRecipe(beefOrder)).toEqual({ noodle: 1, kimchi: 1, purple_cabbage: 1, beef: 1, cauliflower: 1, enoki: 1, sausage: 1, coca: 1 });
   });
 
   it('chấm tô theo độ lệch cay; thứ tự bỏ nguyên liệu không quan trọng', () => {
@@ -68,9 +74,11 @@ describe('orders', () => {
     expect(evaluateBowl(bowl(BEEF_BOWL), beefOrder)).toBe('not-spicy');
   });
 
-  it('thiếu/thừa nguyên liệu, quên nước hay bỏ nhầm cải tím đều là sai món', () => {
+  it('thiếu/thừa nguyên liệu, quên nước, quên cải tím hay nhầm nước đều là sai món', () => {
     const ok = [...BEEF_BOWL, ...chili(3)];
     expect(evaluateBowl({ steps: ok.filter((s) => s !== 'coca') }, beefOrder)).toBe('bad');
+    expect(evaluateBowl({ steps: ok.map((s) => (s === 'coca' ? 'pepsi' : s)) }, beefOrder)).toBe('bad');
+    expect(evaluateBowl({ steps: ok.filter((s) => s !== 'purple_cabbage') }, beefOrder)).toBe('bad');
     expect(evaluateBowl({ steps: ok.filter((s) => s !== 'enoki') }, beefOrder)).toBe('bad');
     expect(evaluateBowl({ steps: [...ok, 'purple_cabbage'] }, beefOrder)).toBe('bad');
     expect(evaluateBowl({ steps: [...ok, 'beef'] }, beefOrder)).toBe('bad');
@@ -118,6 +126,11 @@ describe('orders', () => {
     expect(kinds).toEqual(new Set(['grab-false', 'walk-in-true', 'walk-in-false']));
   });
 
+  it('nhóm bạn: truyền sẵn kiểu phục vụ thì mọi đơn theo đúng kiểu đó', () => {
+    const rng = createRng(5);
+    for (let i = 0; i < 50; i++) expect(generateOrder(rng, 0, { channel: 'walk-in', dineIn: true })).toMatchObject({ channel: 'walk-in', dineIn: true });
+  });
+
   it('chỉ sinh đơn từ món đã mở khóa, cấp cay 0..7, tối đa 1 nước', () => {
     const rng = createRng(42);
     const spices = new Set<number>();
@@ -133,7 +146,7 @@ describe('orders', () => {
       drinks.add(order.drinks[0] ?? 'none');
     }
     expect(spices.size).toBe(MAX_SPICE + 1);
-    expect(drinks).toEqual(new Set(['none', 'coca', 'milk']));
+    expect(drinks).toEqual(new Set(['none', 'coca', 'pepsi', 'fanta', 'sevenup', 'milk']));
   });
 
   it('tip làm tròn nghìn và không âm', () => {
@@ -147,5 +160,12 @@ describe('orders', () => {
     expect(describeOrder(beefOrder)).toBe('Mì cay bò cấp 3 + Coca Cola (mang về)');
     expect(describeOrder({ ...beefOrder, drinks: [], spice: 0, dineIn: true })).toBe('Mì cay bò không cay (ăn tại chỗ)');
     expect(describeOrder({ ...beefOrder, channel: 'grab' })).toBe('Mì cay bò cấp 3 + Coca Cola (grab)');
+    expect(describeOrder({ ...beefOrder, drinks: ['sevenup'] })).toBe('Mì cay bò cấp 3 + 7Up (mang về)');
+  });
+
+  it('tên lượt khách: khách lẻ theo kiểu khách, nhóm bạn theo người dẫn đầu', () => {
+    const look = { archetype: 'ueh', skin: 0, hair: 0 } as const;
+    expect(partyTitle({ name: 'Linh', look, partySize: 1 })).toBe('Sinh viên UEH Linh');
+    expect(partyTitle({ name: 'Linh', look, partySize: 3 })).toBe('Nhóm 3 bạn của Linh');
   });
 });

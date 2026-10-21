@@ -4,6 +4,7 @@ import { stationIngredients } from '../game/data/menu';
 import { formatVND } from '../game/money';
 import type { GameAction } from '../game/state';
 import type { GameState, IngredientId } from '../game/types';
+import { IngredientIcon } from './IngredientIcon';
 import { Modal } from './Modal';
 
 interface Props {
@@ -27,7 +28,9 @@ export function StockModal({ state, dispatch, onClose }: Props) {
           const stock = state.inventory[id];
           return (
             <li key={id} className={inUse.has(id) ? '' : 'unused'}>
-              <span className="stock-emoji">{ing.emoji}</span>
+              <span className="stock-emoji">
+                <IngredientIcon id={id} size={28} />
+              </span>
               <div className="stock-info">
                 <b>{ing.name}</b>
                 <small>

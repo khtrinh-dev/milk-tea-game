@@ -48,9 +48,10 @@
     │   ├── CustomerFigure.tsx # nhân vật khách SVG (11 kiểu) + biểu cảm (vui, cay đỏ mặt, khinh, buồn…)
     │   ├── CleaningPanel.tsx  # tiến độ dọn quán + nút mở cửa (thay quầy nấu lúc 'prep')
     │   ├── Broom.tsx          # cây chổi kéo quét chỗ bẩn (pointer events) + hiệu ứng bụi
-    │   ├── ReviewsModal.tsx   # tab Đánh giá: lịch sử nhận xét của khách
+    │   ├── ReviewsModal.tsx   # tab Đánh giá: lịch sử nhận xét của khách + chủ quán phản hồi
     │   ├── Workstation.tsx    # tô mì, thẻ đơn, hũ ớt, 4 cụm nút nguyên liệu (có nút bớt), giao món
-    │   ├── BowlView.tsx       # tô mì cay SVG + chai nước cạnh tô
+    │   ├── BowlView.tsx       # tô mì cay SVG + lon/hộp nước cạnh tô (DrinkArt)
+    │   ├── IngredientIcon.tsx # hình nguyên liệu: SVG kim chi, cải tím, lon nước; còn lại emoji
     │   ├── StockModal.tsx, RecipeModal.tsx, StaffModal.tsx, DaySummaryModal.tsx
     │   ├── SettingsModal.tsx  # âm thanh, đổi tên quán, tài khoản + trạng thái lưu, hướng dẫn, chơi lại
     │   └── HelpContent.tsx, Modal.tsx, Toasts.tsx
@@ -61,19 +62,23 @@
 
 Không phụ thuộc React hay DOM → test được bằng Vitest thuần.
 
-- **`types.ts`** – `GameState`, `Customer`, `Order`, `Bowl`, `Diner`, `PendingReview`, `DirtSpot`, `GameEvent`…
+- **`types.ts`** – `GameState`, `Customer` (một lượt khách: lẻ hoặc nhóm bạn) gồm các `Guest` (mỗi người 1 `Order`),
+  `Bowl`, `Diner`, `PendingReview`, `ReviewEntry`, `DirtSpot`, `GameEvent`…
 - **`data/`** – dữ liệu tĩnh: `ingredients.ts` (giá vốn từng phần), `menu.ts` (món, nước; giá bán tự tính = vốn +
   `BOWL_PROFIT`), `customers.ts` (kiểu khách), `reactions.ts` (câu nhận xét), `cleaning.ts` (loại chỗ bẩn),
-  `staff.ts`, `shop.ts` (phong cách quán, gợi ý tên).
+  `staff.ts`, `shop.ts` (phong cách quán, gợi ý tên). `reactions.ts` còn có câu khách trả tô (`COMPLAINTS`), nhận xét
+  của nhóm bạn, câu gợi ý cho chủ quán phản hồi và câu khách đáp lại.
 - **`constants.ts`** – hằng số cân bằng: độ dài ngày, nhịp khách, số bàn, thời gian ăn, tỉ lệ Grab/ăn tại chỗ,
   cấp cay, tỉ lệ trả tiền khi lệch cay, danh tiếng…
-- **`orders.ts`** – `generateOrder`, `orderPrice`, `requiredRecipe`, `evaluateBowl` (→ `Reaction`), `payRate`,
-  `bowlCost`, `computeTip`, `describeOrder`, `serviceLabel`.
+- **`orders.ts`** – `rollService`, `generateOrder`, `orderPrice`, `requiredRecipe`, `evaluateBowl` (→ `Reaction`),
+  `payRate`, `bowlCost`, `computeTip`, `describeOrder`, `serviceLabel`, `openGuests` (người còn chờ tô, chưa có đầu
+  bếp nhận), `partyTitle`.
 - **`state.ts`** – `createInitialState(seed, shop)` và `gameReducer(state, action)`; `spawnInterval` (nhịp khách).
 - **`rng.ts`** – mulberry32 có seed. Seed nằm trong state nên reducer cho cùng kết quả với cùng input.
 - **`save.ts`** – `parseSave` / `serializeSave` / `loadGame` / `saveGame` / `clearSave` / `newerSave`
   (key `my-cay-gem/save[/uid]`, vẫn đọc key cũ `milk-tea-game/...` của bản trước khi đổi tên repo; kiểm tra
-  `SAVE_VERSION`; save v1/v2 bị bỏ qua, save v3 thiếu field mới được bổ sung mặc định).
+  `SAVE_VERSION`; save v1/v2 bị bỏ qua, save v3 được chuyển lên v4: giữ tiền/kho/nhân viên/đánh giá, bỏ khách đang
+  dở theo cấu trúc cũ, ngày đang mở thì quay về lúc vừa dọn quán xong).
 
 ### GameState (rút gọn)
 
@@ -84,13 +89,14 @@ Không phụ thuộc React hay DOM → test được bằng Vitest thuần.
   day, dayTimeMs, phase,                       // 'prep' | 'open' | 'closing' | 'summary'
   dirt: DirtSpot[],                            // chỗ bẩn còn phải dọn (phase 'prep')
   inventory: Record<IngredientId, number>,
-  customers: Customer[], selectedCustomerId,   // khách ở quầy (đơn gồm channel, dineIn, dishId, drinks, spice)
+  customers: Customer[],                       // lượt khách ở quầy: { guests: Guest[], patienceMs, waitedMs }
+  selectedCustomerId, selectedGuestId,         // lượt khách + người đang được nấu tô cho
   bowl: { steps: (IngredientId | 'chili')[] }, // tô đang nấu
-  tables: (Diner | null)[],                    // 10 bàn
-  tableQueue: Diner[],                         // khách bưng tô chờ bàn
+  tables: (Diner | null)[],                    // 10 bàn (nhóm bạn ngồi nhiều bàn, chung partyId)
+  tableQueue: Diner[][],                       // các lượt khách bưng tô chờ bàn
   reviews: PendingReview[],                    // khách mang về / Grab sắp gửi đánh giá
   reviewLog: ReviewEntry[],                    // lịch sử đánh giá (60 lượt gần nhất) cho tab Đánh giá
-  staff: { cook, waiter, stocker }, cooks: { customerId, progressMs }[],
+  staff: { cook, waiter, stocker }, cooks: { guestId, progressMs }[],
   dayStats, lastSummary,
   events: GameEvent[], nextEventId,            // hàng đợi thông báo cho UI
   rngSeed, nextId, nextCustomerInMs, ...
@@ -104,13 +110,15 @@ Không phụ thuộc React hay DOM → test được bằng Vitest thuần.
 | `TICK { dt }` | Chạy thời gian (bỏ qua khi `prep`/`summary`): giờ trong ngày, khách tới theo nhịp, giảm kiên nhẫn, đầu bếp, nhân viên kho, khách ăn ở bàn, đánh giá mang về, đóng cửa, tổng kết. |
 | `CLEAN { id }` | Chạm 1 lần vào chỗ bẩn; hết "máu" thì biến mất. Sạch hết → event `clean`. |
 | `OPEN_SHOP` | Mở cửa khi đã dọn sạch (`prep` → `open`). |
-| `SELECT_CUSTOMER { id }` | Chọn đơn để nấu. |
+| `SELECT_CUSTOMER { id }` | Chọn lượt khách để nấu (tự chọn người đầu tiên còn chờ tô). |
+| `SELECT_GUEST { id }` | Chọn một bạn trong nhóm để nấu tô cho bạn đó. |
 | `ADD_INGREDIENT { id }` | Trừ 1 phần trong kho, bỏ vào tô (nước thì đặt lên khay). |
 | `ADD_CHILI` | Thêm 1 shot ớt (tối đa 7). |
 | `REMOVE_INGREDIENT { id }` / `REMOVE_CHILI` | Bớt 1 phần nguyên liệu đã bỏ (trả kho) / bớt 1 shot ớt. |
 | `RENAME_SHOP { name }` | Đổi tên quán (bất cứ lúc nào). |
 | `UNDO` / `DISCARD` | Bỏ thao tác cuối (trả kho) / đổ cả tô (mất nguyên liệu, nước được cất lại). |
-| `SERVE` | Chấm tô: sai món → bỏ tô, trừ tiền giá vốn; đúng món → `deliver()` (vào bàn / chờ bàn / mang về). |
+| `SERVE` | Chấm tô cho người đang chọn (tô khớp y đơn một bạn khác trong nhóm thì giao cho bạn đó). Sai món, hoặc khách ăn tại chỗ bị sai độ cay → `rejectBowl()`: trả tô, phạt nửa giá vốn, khách vẫn chờ. Còn lại → `deliver()` (nhóm đủ tô thì vào bàn / chờ bàn; mang về trả tiền ngay). |
+| `REPLY_REVIEW { id, text }` | Chủ quán phản hồi một đánh giá (1 lần); khách đáp lại; phản hồi lời chê +1 danh tiếng. |
 | `BUY_PACK { id, packs }` | Nhập hàng. |
 | `HIRE` / `FIRE { role }` | Thuê / cho nghỉ nhân viên. |
 | `NEXT_DAY` | Sang ngày mới từ màn tổng kết → `prep` với chỗ bẩn mới. |
@@ -151,10 +159,10 @@ dần). `GameScreen` nhớ `id` cuối đã xử lý; mỗi event mới → toas
 | Event | Hoạt cảnh |
 |---|---|
 | `served` (mang về / Grab) | khách xách túi đi ra cửa, tiền bay lên |
-| `served` (ăn tại chỗ) | khách xuất hiện ngồi ở bàn (đọc từ `state.tables`) hoặc đứng chờ bàn (`state.tableQueue`) |
-| `finished` | khách tại bàn đổi biểu cảm theo `reaction` + bong bóng nhận xét + tiền trả, rồi rời bàn |
+| `served` (ăn tại chỗ) | `done = false`: bạn vừa nhận tô bưng tô đứng chờ cả nhóm; `done = true`: cả lượt xuất hiện ở bàn (đọc từ `state.tables`) hoặc đứng chờ bàn (`state.tableQueue`) |
+| `finished` | cả lượt khách tại các bàn `tables` vui vẻ, bong bóng nhận xét + tiền trả ở bàn đầu, rồi rời bàn |
 | `review` | chỉ toast 📱 (khách ăn ở nhà); nội dung vào `reviewLog` xem ở tab Đánh giá |
-| `wrong` | khách ở quầy mặt buồn + bong bóng chê, vẫn đứng chờ |
+| `wrong` | khách ở quầy mặt buồn + bong bóng chê đòi làm lại, vẫn đứng chờ |
 | `left` | khách giận dữ đi ra cửa |
 
 ## 6. PWA & iPhone

@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { CLOSE_HOUR, COOK_TIME_MS, DAY_LENGTH_MS, OPEN_HOUR, TABLE_COUNT } from '../game/constants';
+import { CLOSE_HOUR, COOK_TIME_MS, DAY_LENGTH_MS, OPEN_HOUR, TABLE_COUNT, TABLES_PER_ROW } from '../game/constants';
 import { DIRT_TYPES } from '../game/data/cleaning';
 import { INGREDIENTS } from '../game/data/ingredients';
 import { DISH_BY_ID } from '../game/data/menu';
 import { STAFF_TYPES } from '../game/data/staff';
 import { formatShortVND } from '../game/money';
-import { customerTitle, serviceLabel } from '../game/orders';
+import { openGuests, partyTitle, serviceLabel, spiceShort } from '../game/orders';
 import type { GameAction } from '../game/state';
-import type { Customer, CustomerLook, Diner, DirtSpot, GameState, OrderChannel, Reaction } from '../game/types';
+import type { Customer, CustomerLook, Diner, DirtSpot, GameState, OrderChannel } from '../game/types';
 import { BroomLayer } from './Broom';
 import { CustomerFigure, type CarryItem, type FigureMood } from './CustomerFigure';
 
@@ -17,16 +17,17 @@ interface Props {
 }
 
 // Bố cục quán (theo % bề ngang, px theo chiều dọc):
-// nửa trên là phòng ăn với 10 bàn (2 dãy × 5), nửa dưới là quầy gọi món với cửa ra vào bên trái.
+// nửa trên là phòng ăn với 10 bàn (2 dãy × 5), nửa dưới là quầy gọi món (4 chỗ đứng) với cửa ra vào bên trái.
 const DOOR_X = 8;
-const spotX = (index: number) => 34 + index * 25;
-const TABLES_PER_ROW = 5;
+const spotX = (index: number) => 29 + index * 20;
 const tableX = (table: number) => 24 + (table % TABLES_PER_ROW) * 17;
 /** Mép trên mặt bàn của dãy bàn trong / ngoài. */
 const tableTop = (table: number) => (table < TABLES_PER_ROW ? 66 : 122);
 /** Chỗ khách bưng tô đứng chờ khi hết bàn. */
 const TABLE_WAIT_X = 1;
 const FIGURE_HEIGHT = 100;
+/** Nhóm bạn đứng chen nhau ở một chỗ nên vẽ nhỏ hơn chút. */
+const PARTY_FIGURE_HEIGHT = 84;
 const SEATED_HEIGHT = 62;
 /** Tốc độ đi bộ: mili-giây cho mỗi 1% bề ngang. */
 const WALK_MS_PER_PERCENT = 20;
@@ -35,15 +36,6 @@ const DOOR_OPEN_MS = 1_400;
 const REACT_MS = 2_800;
 /** Khách nhận tô sai: hiện câu chê + mặt buồn trong khoảng này. */
 const COMPLAIN_MS = 2_600;
-
-const REACTION_MOOD: Record<Reaction, FigureMood> = {
-  delicious: 'happy',
-  spicy: 'hot',
-  'very-spicy': 'hot',
-  mild: 'disdain',
-  'not-spicy': 'disdain',
-  bad: 'sad',
-};
 
 function clock(dayTimeMs: number): string {
   const minutes = (dayTimeMs / DAY_LENGTH_MS) * (CLOSE_HOUR - OPEN_HOUR) * 60;
@@ -108,7 +100,78 @@ function SpeechBubble({ text, tone }: { text: string; tone: FigureMood }) {
   return <div className={`say-bubble say-${tone}`}>{text}</div>;
 }
 
-const SERVICE_ICON = { grab: '🛵', dine: '🪑', takeaway: '🛍️' } as const;
+const SERVICE_TEXT = { grab: 'Grab · mang về', dine: 'Ăn tại chỗ', takeaway: 'Mang về' } as const;
+
+/** Bong bóng đơn trên đầu khách: tên món + cấp cay + ăn tại chỗ hay mang về (nhóm bạn: từng tô của từng bạn). */
+function OrderBubble({ customer, state, service }: { customer: Customer; state: GameState; service: keyof typeof SERVICE_TEXT }) {
+  const { guests } = customer;
+  const [lead] = guests;
+  const cook = guests.length === 1 && lead.takenBy !== null ? state.cooks[lead.takenBy] : null;
+  const left = 1 - customer.waitedMs / customer.patienceMs;
+  const ratio = cook ? cook.progressMs / COOK_TIME_MS : left;
+  const barColor = cook ? 'var(--accent)' : left > 0.5 ? 'var(--ok)' : left > 0.25 ? 'var(--warn)' : 'var(--bad)';
+  const selected = customer.id === state.selectedCustomerId;
+
+  return (
+    <div className={`bubble ${service}`}>
+      {guests.length > 1 ? (
+        <>
+          <div className="bubble-head">Nhóm {guests.length} người</div>
+          <ul className="bubble-list">
+            {guests.map((g) => (
+              <li
+                key={g.id}
+                className={g.served ? 'done' : g.takenBy !== null ? 'cooking' : selected && g.id === state.selectedGuestId ? 'current' : ''}
+              >
+                {g.served ? '✓ ' : g.takenBy !== null ? '👨‍🍳 ' : ''}
+                {DISH_BY_ID[g.order.dishId].short} · {g.order.spice === 0 ? 'ko cay' : `cay ${g.order.spice}`}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <>
+          <div className="bubble-dish">
+            {cook && '👨‍🍳 '}
+            {DISH_BY_ID[lead.order.dishId].name}
+          </div>
+          <div className="bubble-sub">
+            {spiceShort(lead.order.spice)}
+            {lead.order.drinks.map((d) => ` + ${INGREDIENTS[d].name}`).join('')}
+          </div>
+        </>
+      )}
+      <div className={`bubble-service ${service}`}>{SERVICE_TEXT[service]}</div>
+      <div className="patience">
+        <div style={{ width: `${Math.max(0, ratio) * 100}%`, background: barColor }} />
+      </div>
+    </div>
+  );
+}
+
+/** Một hoặc nhiều nhân vật đứng chen nhau (nhóm bạn). */
+function Crowd({
+  looks,
+  walking,
+  mood,
+  carrying,
+  facing,
+}: {
+  looks: { look: CustomerLook; carrying?: CarryItem | null }[];
+  walking: boolean;
+  mood: FigureMood;
+  carrying?: CarryItem | null;
+  facing?: 'left' | 'right';
+}) {
+  const height = looks.length > 1 ? PARTY_FIGURE_HEIGHT : FIGURE_HEIGHT;
+  return (
+    <span className={`crowd ${looks.length > 1 ? 'party' : ''}`}>
+      {looks.map((l, i) => (
+        <CustomerFigure key={i} look={l.look} walking={walking} mood={mood} carrying={l.carrying ?? carrying} facing={facing} height={height} />
+      ))}
+    </span>
+  );
+}
 
 function CustomerActor({
   customer,
@@ -125,47 +188,28 @@ function CustomerActor({
   state: GameState;
   onSelect: (id: number) => void;
 }) {
-  const { order } = customer;
-  const dish = DISH_BY_ID[order.dishId];
-  const cook = customer.takenBy !== null ? state.cooks[customer.takenBy] : null;
+  const { guests } = customer;
+  const [lead] = guests;
+  const busy = openGuests(customer).length === 0;
   const left = 1 - customer.waitedMs / customer.patienceMs;
-  const ratio = cook ? cook.progressMs / COOK_TIME_MS : left;
-  const barColor = cook ? 'var(--accent)' : left > 0.5 ? 'var(--ok)' : left > 0.25 ? 'var(--warn)' : 'var(--bad)';
-  const mood = complaint ? 'sad' : cook ? 'happy' : moodFor(left);
-  const service = order.channel === 'grab' ? 'grab' : order.dineIn ? 'dine' : 'takeaway';
+  const mood = complaint ? 'sad' : busy ? 'happy' : moodFor(left);
+  const service = lead.order.channel === 'grab' ? 'grab' : lead.order.dineIn ? 'dine' : 'takeaway';
+  const group = guests.length > 1;
 
   return (
-    <Walker x={spotX(index)} startX={DOOR_X} className={`actor ${selected ? 'selected' : ''} ${cook ? 'taken' : ''}`}>
+    <Walker x={spotX(index)} startX={DOOR_X} className={`actor ${selected ? 'selected' : ''} ${busy ? 'taken' : ''}`}>
       {(walking) => (
         <button
           className="actor-hit"
           onClick={() => onSelect(customer.id)}
-          disabled={!!cook}
-          aria-label={`Đơn của ${customerTitle(customer)}: ${dish.name}, cay cấp ${order.spice}, ${serviceLabel(order)}`}
+          disabled={busy}
+          aria-label={`Đơn của ${partyTitle(customer)}: ${guests.map((g) => `${DISH_BY_ID[g.order.dishId].name} ${spiceShort(g.order.spice)}`).join(', ')}, ${serviceLabel(lead.order)}`}
         >
-          {!walking &&
-            (complaint ? (
-              <SpeechBubble text={complaint} tone="sad" />
-            ) : (
-              <div className={`bubble ${service}`}>
-                <div className="bubble-items">
-                  <span className="bubble-service">{SERVICE_ICON[service]}</span>
-                  <span className="bubble-dish">{dish.emoji}</span>
-                  <span className="bubble-spice">🌶️{order.spice}</span>
-                  {order.drinks.map((d) => (
-                    <span key={d} className="bubble-top">{INGREDIENTS[d].emoji}</span>
-                  ))}
-                  {cook && <span className="bubble-top">👨‍🍳</span>}
-                </div>
-                <div className="patience">
-                  <div style={{ width: `${Math.max(0, ratio) * 100}%`, background: barColor }} />
-                </div>
-              </div>
-            ))}
+          {!walking && (complaint ? <SpeechBubble text={complaint} tone="sad" /> : <OrderBubble customer={customer} state={state} service={service} />)}
           {selected && !walking && !complaint && <span className="select-arrow">▼</span>}
           <span className="actor-shadow" />
-          <CustomerFigure look={customer.look} walking={walking} mood={mood} height={FIGURE_HEIGHT} />
-          <span className="actor-name">{order.channel === 'grab' ? `🛵 ${customer.name}` : customer.name}</span>
+          <Crowd looks={guests.map((g) => ({ look: g.look, carrying: g.served ? 'bowl' : null }))} walking={walking} mood={mood} />
+          <span className="actor-name">{group ? `Nhóm ${guests.length}` : lead.order.channel === 'grab' ? `🛵 ${lead.name}` : lead.name}</span>
         </button>
       )}
     </Walker>
@@ -174,7 +218,7 @@ function CustomerActor({
 
 interface Departure {
   id: number;
-  look: CustomerLook;
+  looks: CustomerLook[];
   fromX: number;
   /** null = bỏ về vì chờ lâu. */
   carrying: CarryItem | null;
@@ -193,7 +237,7 @@ function DepartureActor({ d }: { d: Departure }) {
           {angry && <span className="anger-float">💢</span>}
           {!angry && d.channel === 'grab' && <span className="anger-float">🛵</span>}
           <span className="actor-shadow" />
-          <CustomerFigure look={d.look} walking={walking} mood={angry ? 'angry' : 'happy'} carrying={d.carrying} facing="left" height={FIGURE_HEIGHT} />
+          <Crowd looks={d.looks.map((look) => ({ look }))} walking={walking} mood={angry ? 'angry' : 'happy'} carrying={d.carrying} facing="left" />
         </>
       )}
     </Walker>
@@ -225,10 +269,10 @@ function useDepartures(state: GameState): { departures: Departure[]; exits: numb
       if (served?.dineIn) continue;
       fresh.push({
         id: c.id,
-        look: c.look,
+        looks: c.guests.map((g) => g.look),
         fromX: spotX(index),
         carrying: served ? 'bag' : null,
-        channel: c.order.channel,
+        channel: c.guests[0].order.channel,
         amount: served ? served.amount : 0,
       });
     }
@@ -249,11 +293,12 @@ function useDepartures(state: GameState): { departures: Departure[]; exits: numb
 }
 
 interface FinishedMeal {
+  /** Id người khách (Diner.id). */
   id: number;
   table: number;
   look: CustomerLook;
-  reaction: Exclude<Reaction, 'bad'>;
-  feedback: string;
+  /** Câu nhận xét + tiền chỉ hiện ở bàn đầu tiên của nhóm. */
+  feedback: string | null;
   amount: number;
 }
 
@@ -271,9 +316,10 @@ function useFinishedMeals(state: GameState): FinishedMeal[] {
     const fresh: FinishedMeal[] = [];
     before.forEach((d, table) => {
       if (!d || state.tables[table]?.id === d.id) return;
-      const event = [...state.events].reverse().find((e) => e.type === 'finished' && e.customerId === d.id);
+      const event = [...state.events].reverse().find((e) => e.type === 'finished' && e.customerId === d.partyId);
       if (event?.type !== 'finished') return;
-      fresh.push({ id: d.id, table, look: d.look, reaction: event.reaction, feedback: event.feedback, amount: event.amount });
+      const first = event.tables[0] === table;
+      fresh.push({ id: d.id, table, look: d.look, feedback: first ? event.feedback : null, amount: first ? event.amount : 0 });
     });
     if (fresh.length === 0) return;
     setMeals((list) => [...list, ...fresh]);
@@ -325,13 +371,14 @@ function Table({
   dirty: boolean;
 }) {
   const top = tableTop(table);
-  const mood = meal ? REACTION_MOOD[meal.reaction] : 'normal';
+  const mood: FigureMood = meal ? 'happy' : 'normal';
   const look = diner?.look ?? meal?.look;
+  const party = (diner?.partySize ?? 1) > 1;
   return (
-    <div className={`table-spot ${meal ? 'reacting' : ''}`} style={{ left: `${tableX(table)}%`, top }}>
+    <div className={`table-spot ${meal ? 'reacting' : ''} ${party ? 'party' : ''}`} style={{ left: `${tableX(table)}%`, top }}>
       {look && (
         <div className={`seated ${diner ? 'eating' : ''}`}>
-          {meal && <SpeechBubble text={meal.feedback} tone={mood} />}
+          {meal?.feedback && <SpeechBubble text={meal.feedback} tone={mood} />}
           {meal && meal.amount > 0 && <span className="coin-float">+{formatShortVND(meal.amount)}</span>}
           <CustomerFigure look={look} mood={mood} height={SEATED_HEIGHT} />
         </div>
@@ -372,7 +419,8 @@ export function ShopScene({ state, dispatch }: Props) {
   const prep = state.phase === 'prep';
   const closed = state.phase !== 'open';
   // Hết giờ nhưng còn khách ở quầy / đang ngồi ăn / chờ bàn: quán chỉ đóng hẳn khi khách cuối cùng ăn xong.
-  const stillEating = state.tables.filter((d) => d !== null).length + state.tableQueue.length;
+  const waitingForTable = state.tableQueue.flat();
+  const stillEating = state.tables.filter((d) => d !== null).length + waitingForTable.length;
   const closingSoon = state.phase === 'closing' && (stillEating > 0 || state.customers.length > 0);
   const busyTables = state.tables.filter((d) => d !== null).length;
 
@@ -420,11 +468,11 @@ export function ShopScene({ state, dispatch }: Props) {
         <Table key={table} table={table} diner={diner} meal={meals.find((m) => m.table === table)} dirty={dirtyTables.has(table)} />
       ))}
 
-      {state.tableQueue.length > 0 && (
+      {waitingForTable.length > 0 && (
         <div className="table-wait" style={{ left: `${TABLE_WAIT_X}%` }}>
-          <span className="pill small full">⏳ {state.tableQueue.length}</span>
+          <span className="pill small full">⏳ {waitingForTable.length}</span>
           <div className="table-wait-people">
-            {state.tableQueue.slice(0, 3).map((d) => (
+            {waitingForTable.slice(0, 3).map((d) => (
               <CustomerFigure key={d.id} look={d.look} mood="worried" carrying="bowl" height={SEATED_HEIGHT + 6} />
             ))}
           </div>

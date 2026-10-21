@@ -1,4 +1,4 @@
-import type { JSX } from 'react';
+import type { JSX, ReactNode } from 'react';
 import { MAX_SPICE } from '../game/constants';
 import { bowlContents, bowlDrinks, chiliShots } from '../game/orders';
 import type { Bowl, IngredientId } from '../game/types';
@@ -75,10 +75,19 @@ function Piece({ id, x, y }: { id: IngredientId; x: number; y: number }): JSX.El
         </g>
       );
     case 'kimchi':
+      // miếng cải thảo muối ớt: lá cam đỏ, cọng trắng ngà, lấm tấm ớt bột
       return (
         <g>
-          <path d={`M${x - 7} ${y + 2} L${x - 4} ${y - 4} L${x} ${y - 1} L${x + 3} ${y - 5} L${x + 7} ${y + 1} L${x + 2} ${y + 4} Z`} fill="#e2452f" {...stroke} />
-          <path d={`M${x - 4} ${y + 1} L${x + 3} ${y - 1}`} stroke="#ffd2b8" strokeWidth={1} />
+          <path
+            d={`M${x - 7} ${y + 3} C${x - 8} ${y - 2} ${x - 4} ${y - 5} ${x} ${y - 4} C${x + 4} ${y - 5} ${x + 8} ${y - 2} ${x + 7} ${y + 2} C${x + 4} ${y + 5} ${x - 4} ${y + 6} ${x - 7} ${y + 3} Z`}
+            fill="#f06a3c"
+            {...stroke}
+          />
+          <path d={`M${x - 5} ${y + 2.6} Q${x} ${y + 4.6} ${x + 5} ${y + 1.8}`} stroke="#fff1d6" strokeWidth={2} fill="none" strokeLinecap="round" />
+          <path d={`M${x - 3} ${y - 2.5} q1.5 -1.2 3 0 q1.5 -1.2 3 0`} stroke="#ffb08a" strokeWidth={0.8} fill="none" />
+          <circle cx={x - 2.5} cy={y - 0.5} r={0.8} fill="#9e1208" />
+          <circle cx={x + 2.5} cy={y - 1.2} r={0.8} fill="#9e1208" />
+          <circle cx={x + 0.5} cy={y + 0.8} r={0.7} fill="#9e1208" />
         </g>
       );
     case 'enoki':
@@ -92,13 +101,23 @@ function Piece({ id, x, y }: { id: IngredientId; x: number; y: number }): JSX.El
           ))}
         </g>
       );
-    case 'purple_cabbage':
+    case 'purple_cabbage': {
+      // cải tím bào sợi: viền đen để nổi trên nước dùng đỏ
+      const shreds = [`M${x - 7} ${y - 2} q3.5 -3 7 0 t6 -1`, `M${x - 6} ${y + 2.5} q3 -2.5 6 0 t6 0`, `M${x - 3} ${y + 0.2} q2.5 -1.8 5 0`];
       return (
-        <g stroke="#8e3fa0" strokeWidth={1.8} strokeLinecap="round" fill="none">
-          <path d={`M${x - 7} ${y - 2} q3 -2 6 0 t6 0`} />
-          <path d={`M${x - 5} ${y + 2} q3 -2 6 0 t5 0`} />
+        <g fill="none" strokeLinecap="round">
+          {shreds.map((d) => (
+            <path key={`o${d}`} d={d} stroke={OL} strokeWidth={3.8} />
+          ))}
+          {shreds.map((d) => (
+            <path key={`p${d}`} d={d} stroke="#9b45b5" strokeWidth={2.4} />
+          ))}
+          {shreds.map((d) => (
+            <path key={`h${d}`} d={d} stroke="#e7c2f2" strokeWidth={0.6} />
+          ))}
         </g>
       );
+    }
     case 'cauliflower':
       return (
         <g>
@@ -135,17 +154,58 @@ function Noodles({ count, color }: { count: number; color: string }) {
   );
 }
 
-export function DrinkArt({ id, size = 30 }: { id: IngredientId; size?: number }) {
+/** Lon nước ngọt: thân màu + nắp nhôm, `children` là logo trên thân lon. */
+function Can({ color, children }: { color: string; children: ReactNode }) {
   return (
-    <svg className="drink-art" viewBox="0 0 30 44" width={size} height={(size * 44) / 30} aria-hidden="true">
-      {id === 'coca' ? (
-        <g>
-          <rect x="5" y="4" width="20" height="38" rx="4" fill="#d81e1e" stroke={OL} strokeWidth="2" />
-          <rect x="7" y="2" width="16" height="4" rx="1.5" fill="#c9c9c9" stroke={OL} strokeWidth="1.5" />
+    <g>
+      <rect x="5" y="4" width="20" height="38" rx="4" fill={color} stroke={OL} strokeWidth="2" />
+      <rect x="7" y="2" width="16" height="4" rx="1.5" fill="#c9c9c9" stroke={OL} strokeWidth="1.5" />
+      <rect x="8" y="9" width="2.2" height="28" rx="1.1" fill="#fff" opacity="0.25" />
+      {children}
+    </g>
+  );
+}
+
+function DrinkShape({ id }: { id: IngredientId }) {
+  switch (id) {
+    case 'coca':
+      return (
+        <Can color="#d81e1e">
           <path d="M5 22 q5 -5 10 0 t10 0" stroke="#fff" strokeWidth="2.4" fill="none" />
           <text x="15" y="18" textAnchor="middle" className="drink-label">Coca</text>
-        </g>
-      ) : (
+        </Can>
+      );
+    case 'pepsi':
+      return (
+        <Can color="#1d4fa0">
+          <text x="15" y="15.5" textAnchor="middle" className="drink-label">pepsi</text>
+          {/* quả cầu đỏ – trắng – xanh */}
+          <circle cx="15" cy="27" r="6.4" fill="#fff" stroke={OL} strokeWidth="1" />
+          <path d="M8.6 26.4 A6.4 6.4 0 0 1 21.4 26.4 Q18 24.2 15 26 T8.6 26.4 Z" fill="#e32934" />
+          <path d="M8.8 28.6 Q12 30.4 15 28.6 T21.2 28 A6.4 6.4 0 0 1 8.8 28.6 Z" fill="#1d4fa0" />
+        </Can>
+      );
+    case 'fanta':
+      return (
+        <Can color="#ff8a00">
+          {/* lát cam + chữ Fanta xanh */}
+          <circle cx="15" cy="30" r="5.4" fill="#ffd27a" stroke={OL} strokeWidth="1" />
+          <path d="M15 24.6 V35.4 M9.6 30 H20.4 M11.2 26.2 L18.8 33.8 M18.8 26.2 L11.2 33.8" stroke="#ff9d1c" strokeWidth="0.9" />
+          <path d="M18 23.5 q4 -3 6 0 q-3 2 -6 0 z" fill="#3fae2a" stroke={OL} strokeWidth="0.7" />
+          <text x="15" y="18" textAnchor="middle" className="drink-label fanta">Fanta</text>
+        </Can>
+      );
+    case 'sevenup':
+      return (
+        <Can color="#1f9d3a">
+          <rect x="8" y="12" width="14" height="20" rx="3" fill="#fff" stroke={OL} strokeWidth="1" />
+          <text x="15" y="24" textAnchor="middle" className="drink-label seven">7</text>
+          <text x="15" y="30.5" textAnchor="middle" className="drink-label seven-up">up</text>
+          <circle cx="19" cy="17" r="1.8" fill="#e32934" />
+        </Can>
+      );
+    default:
+      return (
         <g>
           <path d="M6 12 L15 4 L24 12 V42 H6 Z" fill="#f4f6fb" stroke={OL} strokeWidth="2" strokeLinejoin="round" />
           <path d="M6 12 H24" stroke={OL} strokeWidth="1.5" />
@@ -153,7 +213,14 @@ export function DrinkArt({ id, size = 30 }: { id: IngredientId; size?: number })
           <text x="15" y="30" textAnchor="middle" className="drink-label light">SỮA</text>
           <rect x="17" y="0" width="2.4" height="8" fill="#e53935" stroke={OL} strokeWidth="0.8" transform="rotate(12 18 4)" />
         </g>
-      )}
+      );
+  }
+}
+
+export function DrinkArt({ id, size = 30 }: { id: IngredientId; size?: number }) {
+  return (
+    <svg className="drink-art" viewBox="0 0 30 44" width={size} height={(size * 44) / 30} aria-hidden="true">
+      <DrinkShape id={id} />
     </svg>
   );
 }
